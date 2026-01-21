@@ -4,7 +4,7 @@ pre-commit:
   parallel: true
   jobs:
     - name: lint & test
-      glob: "*.go"
+      glob: "**/*.go"
       group:
         jobs:
           - run: make lint

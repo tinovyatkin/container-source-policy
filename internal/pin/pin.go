@@ -49,8 +49,9 @@ func GeneratePolicy(ctx context.Context, opts Options) (*policy.Policy, error) {
 			}
 
 			if opts.DryRun {
-				// In dry-run mode, use a placeholder digest
-				pol.AddPinRule(ref.Original, ref.Ref.String()+"@sha256:dry-run-placeholder")
+				// In dry-run mode, use a valid placeholder digest (64 zeros)
+				const dryRunDigest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+				pol.AddPinRule(ref.Original, ref.Ref.String()+"@"+dryRunDigest)
 				continue
 			}
 

@@ -10,7 +10,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:dry-run-placeholder"
+        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
     }
   ]
@@ -29,7 +29,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:dry-run-placeholder"
+        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
     },
     {
@@ -39,7 +39,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:dry-run-placeholder"
+        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
     }
   ]
@@ -58,7 +58,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://ghcr.io/actions/actions-runner:latest@sha256:dry-run-placeholder"
+        "identifier": "docker-image://ghcr.io/actions/actions-runner:latest@sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
     }
   ]
@@ -77,7 +77,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:dry-run-placeholder"
+        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:0000000000000000000000000000000000000000000000000000000000000000"
       }
     }
   ]

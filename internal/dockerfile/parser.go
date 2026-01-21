@@ -46,14 +46,20 @@ func Parse(ctx context.Context, r io.Reader) ([]ImageRef, error) {
 	}
 
 	var refs []ImageRef
+	stageNames := make(map[string]bool)
+
 	for _, child := range result.AST.Children {
 		if strings.EqualFold(child.Value, "from") {
-			ref, err := parseFromInstruction(child)
+			ref, err := parseFromInstruction(child, stageNames)
 			if err != nil {
 				return nil, err
 			}
 			if ref != nil {
 				refs = append(refs, *ref)
+				// Track the stage name for subsequent FROM instructions
+				if ref.StageName != "" {
+					stageNames[strings.ToLower(ref.StageName)] = true
+				}
 			}
 		}
 	}
@@ -61,7 +67,12 @@ func Parse(ctx context.Context, r io.Reader) ([]ImageRef, error) {
 	return refs, nil
 }
 
-func parseFromInstruction(node *parser.Node) (*ImageRef, error) {
+// containsVariable checks if the string contains unexpanded ARG/ENV syntax
+func containsVariable(s string) bool {
+	return strings.Contains(s, "${") || strings.Contains(s, "$(")
+}
+
+func parseFromInstruction(node *parser.Node, stageNames map[string]bool) (*ImageRef, error) {
 	if node.Next == nil {
 		return nil, nil
 	}
@@ -70,6 +81,16 @@ func parseFromInstruction(node *parser.Node) (*ImageRef, error) {
 
 	// Skip scratch base image
 	if strings.EqualFold(original, "scratch") {
+		return nil, nil
+	}
+
+	// Skip references to previous build stages (multi-stage builds)
+	if stageNames[strings.ToLower(original)] {
+		return nil, nil
+	}
+
+	// Skip references containing unexpanded ARG/ENV variables
+	if containsVariable(original) {
 		return nil, nil
 	}
 

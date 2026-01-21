@@ -95,6 +95,29 @@ func TestParse(t *testing.T) {
 			dockerfile: "FROM scratch",
 			wantCount:  0,
 		},
+		{
+			name:       "multi-stage FROM reference to previous stage is skipped",
+			dockerfile: "FROM golang:1.21 AS builder\nFROM builder",
+			wantCount:  1,
+			wantFirst: struct {
+				original  string
+				domain    string
+				path      string
+				tag       string
+				stageName string
+			}{
+				original:  "golang:1.21",
+				domain:    "docker.io",
+				path:      "library/golang",
+				tag:       "1.21",
+				stageName: "builder",
+			},
+		},
+		{
+			name:       "ARG variable in FROM is skipped",
+			dockerfile: "ARG BASE_IMAGE=alpine:3.18\nFROM ${BASE_IMAGE}",
+			wantCount:  0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -122,8 +145,11 @@ func TestParse(t *testing.T) {
 			if reference.Path(got.Ref) != tt.wantFirst.path {
 				t.Errorf("Path = %q, want %q", reference.Path(got.Ref), tt.wantFirst.path)
 			}
-			if tagged, ok := got.Ref.(reference.Tagged); ok {
-				if tagged.Tag() != tt.wantFirst.tag {
+			if tt.wantFirst.tag != "" {
+				tagged, ok := got.Ref.(reference.Tagged)
+				if !ok {
+					t.Errorf("Expected tagged reference, got untagged")
+				} else if tagged.Tag() != tt.wantFirst.tag {
 					t.Errorf("Tag = %q, want %q", tagged.Tag(), tt.wantFirst.tag)
 				}
 			}
