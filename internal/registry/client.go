@@ -7,6 +7,7 @@ import (
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/containers/image/v5/manifest"
+	"github.com/containers/image/v5/pkg/cli/environment"
 	"github.com/containers/image/v5/types"
 )
 
@@ -16,9 +17,15 @@ type Client struct {
 }
 
 // NewClient creates a new registry client
+// It respects CONTAINERS_REGISTRIES_CONF environment variable for registry configuration
 func NewClient() *Client {
+	sysCtx := &types.SystemContext{}
+
+	// Apply CONTAINERS_REGISTRIES_CONF or REGISTRIES_CONFIG_PATH env vars if set
+	_ = environment.UpdateRegistriesConf(sysCtx)
+
 	return &Client{
-		sysCtx: &types.SystemContext{},
+		sysCtx: sysCtx,
 	}
 }
 

@@ -1,5 +1,5 @@
 
-[TestPinDryRun/simple - 1]
+[TestPin/simple - 1]
 {
   "version": 1,
   "rules": [
@@ -10,7 +10,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:dca69b6823d2cff137b073f278d243679fccbbe39b939dbff7747587013cc3b7"
       }
     }
   ]
@@ -18,7 +18,7 @@
 
 ---
 
-[TestPinDryRun/multistage - 1]
+[TestPin/multistage - 1]
 {
   "version": 1,
   "rules": [
@@ -29,7 +29,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:96e077c89b19c49293d08095895f67d9ddbbf5ceb6afa82c0b043ae78911d962"
       }
     },
     {
@@ -39,7 +39,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        "identifier": "docker-image://docker.io/library/alpine:3.18@sha256:dca69b6823d2cff137b073f278d243679fccbbe39b939dbff7747587013cc3b7"
       }
     }
   ]
@@ -47,7 +47,7 @@
 
 ---
 
-[TestPinDryRun/ghcr - 1]
+[TestPin/ghcr - 1]
 {
   "version": 1,
   "rules": [
@@ -58,7 +58,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://ghcr.io/actions/actions-runner:latest@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        "identifier": "docker-image://ghcr.io/actions/actions-runner:latest@sha256:ab21bc9f6d0b48ff736eb43e8aa57c4f5dc0b0c4f2bac6ead8abaf571363ad93"
       }
     }
   ]
@@ -66,7 +66,7 @@
 
 ---
 
-[TestPinDryRun/scratch - 1]
+[TestPin/scratch - 1]
 {
   "version": 1,
   "rules": [
@@ -77,7 +77,7 @@
         "matchType": "EXACT"
       },
       "updates": {
-        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        "identifier": "docker-image://docker.io/library/golang:1.21@sha256:96e077c89b19c49293d08095895f67d9ddbbf5ceb6afa82c0b043ae78911d962"
       }
     }
   ]

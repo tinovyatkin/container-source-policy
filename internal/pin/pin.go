@@ -17,15 +17,11 @@ import (
 // Options configures the pin operation
 type Options struct {
 	Dockerfiles []string
-	DryRun      bool
 }
 
 // GeneratePolicy parses Dockerfiles and generates a source policy with pinned digests
 func GeneratePolicy(ctx context.Context, opts Options) (*policy.Policy, error) {
-	var client *registry.Client
-	if !opts.DryRun {
-		client = registry.NewClient()
-	}
+	client := registry.NewClient()
 	pol := policy.NewPolicy()
 
 	seen := make(map[string]bool)
@@ -45,13 +41,6 @@ func GeneratePolicy(ctx context.Context, opts Options) (*policy.Policy, error) {
 
 			// Skip references that already have a digest
 			if _, ok := ref.Ref.(reference.Digested); ok {
-				continue
-			}
-
-			if opts.DryRun {
-				// In dry-run mode, use a valid placeholder digest (64 zeros)
-				const dryRunDigest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-				pol.AddPinRule(ref.Original, ref.Ref.String()+"@"+dryRunDigest)
 				continue
 			}
 
