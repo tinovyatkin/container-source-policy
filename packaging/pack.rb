@@ -3,7 +3,8 @@
 require "fileutils"
 require "json"
 
-VERSION = "0.1.0"
+# Version from VERSION env var (strips leading 'v' if present), or fallback
+VERSION = (ENV["VERSION"] || "0.1.0").sub(/^v/, "")
 
 ROOT = File.join(__dir__, "..")
 DIST = File.join(ROOT, "dist")
@@ -16,6 +17,7 @@ module Pack
   module_function
 
   def prepare
+    puts "Preparing release for version #{VERSION}"
     clean
     set_version
     put_additional_files
