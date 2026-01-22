@@ -40,19 +40,27 @@ type ParseResult struct {
 	HTTPSources []HTTPSourceRef
 }
 
+// openDockerfile opens a Dockerfile path for reading.
+// If path is "-", returns os.Stdin and a no-op closer.
+// Otherwise, opens the file and returns it with its Close method.
+func openDockerfile(path string) (io.Reader, func() error, error) {
+	if path == "-" {
+		return os.Stdin, func() error { return nil }, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return f, f.Close, nil
+}
+
 // ParseFile parses a Dockerfile and extracts all image references
 func ParseFile(ctx context.Context, path string) ([]ImageRef, error) {
-	var r io.Reader
-	if path == "-" {
-		r = os.Stdin
-	} else {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = f.Close() }()
-		r = f
+	r, closer, err := openDockerfile(path)
+	if err != nil {
+		return nil, err
 	}
+	defer func() { _ = closer() }()
 	return Parse(ctx, r)
 }
 
@@ -67,17 +75,11 @@ func Parse(ctx context.Context, r io.Reader) ([]ImageRef, error) {
 
 // ParseAllFile parses a Dockerfile and extracts all references (images and HTTP sources)
 func ParseAllFile(ctx context.Context, path string) (*ParseResult, error) {
-	var r io.Reader
-	if path == "-" {
-		r = os.Stdin
-	} else {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = f.Close() }()
-		r = f
+	r, closer, err := openDockerfile(path)
+	if err != nil {
+		return nil, err
 	}
+	defer func() { _ = closer() }()
 	return ParseAll(ctx, r)
 }
 
