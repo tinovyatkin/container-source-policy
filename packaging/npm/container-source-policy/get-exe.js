@@ -1,5 +1,3 @@
-const path = require("path");
-
 function getExePath() {
   // Detect OS
   // https://nodejs.org/api/process.html#process_process_platform
