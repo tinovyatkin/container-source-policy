@@ -17,7 +17,7 @@ def main():
     subfolder = f"container-source-policy-{os_name}-{arch}"
     executable = os.path.join(os.path.dirname(__file__), "bin", subfolder, "container-source-policy"+ext)
     if not os.path.isfile(executable):
-        print(f"Couldn't find binary {executable}. Please create an issue: {ISSUE_URL}")
+        print(f"Couldn't find binary {executable}. Please create an issue: {ISSUE_URL}", file=sys.stderr)
         return 1
 
     result = subprocess.run([executable] + sys.argv[1:])
