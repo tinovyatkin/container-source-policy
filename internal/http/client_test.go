@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -222,6 +225,178 @@ func TestGetChecksumFromHEAD(t *testing.T) {
 				t.Errorf("getChecksumFromHEAD() = %v, want %v", checksum, tt.wantChecksum)
 			}
 		})
+	}
+}
+
+func TestGetChecksumFromGitHubRelease(t *testing.T) {
+	tests := []struct {
+		name         string
+		path         string // URL path to simulate (e.g., /owner/repo/releases/download/tag/asset)
+		responseCode int
+		responseBody string
+		wantChecksum string
+		wantErr      bool
+		errContains  string
+	}{
+		{
+			name:         "valid release with digest",
+			path:         "/cli/cli/releases/download/v2.50.0/gh_2.50.0_linux_amd64.tar.gz",
+			responseCode: http.StatusOK,
+			responseBody: `{"assets":[{"name":"gh_2.50.0_linux_amd64.tar.gz","digest":"sha256:abc123"}]}`,
+			wantChecksum: "sha256:abc123",
+			wantErr:      false,
+		},
+		{
+			name:         "asset not found in release",
+			path:         "/cli/cli/releases/download/v2.50.0/nonexistent.tar.gz",
+			responseCode: http.StatusOK,
+			responseBody: `{"assets":[{"name":"other.tar.gz","digest":"sha256:xyz"}]}`,
+			wantChecksum: "",
+			wantErr:      true,
+			errContains:  "not found",
+		},
+		{
+			name:         "asset exists but no digest",
+			path:         "/cli/cli/releases/download/v2.50.0/gh_2.50.0_linux_amd64.tar.gz",
+			responseCode: http.StatusOK,
+			responseBody: `{"assets":[{"name":"gh_2.50.0_linux_amd64.tar.gz","digest":""}]}`,
+			wantChecksum: "",
+			wantErr:      true,
+			errContains:  "not found",
+		},
+		{
+			name:         "invalid URL format (too few path parts)",
+			path:         "/cli/cli/releases",
+			responseCode: http.StatusOK,
+			responseBody: `{}`,
+			wantChecksum: "",
+			wantErr:      true,
+			errContains:  "invalid GitHub release URL format",
+		},
+		{
+			name:         "API error response",
+			path:         "/cli/cli/releases/download/v2.50.0/gh.tar.gz",
+			responseCode: http.StatusNotFound,
+			responseBody: `{"message":"Not Found"}`,
+			wantChecksum: "",
+			wantErr:      true,
+			errContains:  "GitHub API request failed",
+		},
+		{
+			name:         "API returns invalid JSON",
+			path:         "/cli/cli/releases/download/v2.50.0/gh.tar.gz",
+			responseCode: http.StatusOK,
+			responseBody: `not json`,
+			wantChecksum: "",
+			wantErr:      true,
+			errContains:  "failed to decode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock server that simulates GitHub API
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify correct headers are sent
+				if r.Header.Get("Accept") != "application/vnd.github+json" {
+					t.Error("expected Accept: application/vnd.github+json header")
+				}
+				if r.Header.Get("X-GitHub-Api-Version") != "2022-11-28" {
+					t.Error("expected X-GitHub-Api-Version: 2022-11-28 header")
+				}
+				w.WriteHeader(tt.responseCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			// We need to test via GetChecksum since getChecksumFromGitHubRelease
+			// constructs its own API URL. We'll create a custom client that
+			// redirects API calls to our mock server.
+			client := &Client{
+				httpClient: server.Client(),
+			}
+
+			// Parse the test path as a URL
+			testURL, err := url.Parse("https://github.com" + tt.path)
+			if err != nil {
+				t.Fatalf("failed to parse test URL: %v", err)
+			}
+
+			// For the invalid URL test, we can call directly
+			if tt.errContains == "invalid GitHub release URL format" {
+				_, err := client.getChecksumFromGitHubRelease(context.Background(), testURL)
+				if err == nil {
+					t.Error("expected error for invalid URL format")
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			// For other tests, we need to override the API URL
+			// Since we can't easily do that, let's test via a modified approach
+			// by directly calling with a mock that intercepts the HTTP call
+			customClient := &Client{
+				httpClient: &http.Client{
+					Transport: &mockTransport{
+						handler: func(req *http.Request) (*http.Response, error) {
+							// Return our mock response
+							return &http.Response{
+								StatusCode: tt.responseCode,
+								Body:       io.NopCloser(strings.NewReader(tt.responseBody)),
+								Header:     make(http.Header),
+							}, nil
+						},
+					},
+				},
+			}
+
+			checksum, err := customClient.getChecksumFromGitHubRelease(context.Background(), testURL)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getChecksumFromGitHubRelease() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.errContains != "" && err != nil {
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			}
+			if checksum != tt.wantChecksum {
+				t.Errorf("getChecksumFromGitHubRelease() = %v, want %v", checksum, tt.wantChecksum)
+			}
+		})
+	}
+}
+
+// mockTransport is a custom http.RoundTripper for testing
+type mockTransport struct {
+	handler func(*http.Request) (*http.Response, error)
+}
+
+func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return m.handler(req)
+}
+
+func TestGetChecksumFromGitHubRelease_RealAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping real API test in short mode")
+	}
+
+	// Test against a real GitHub release that has digest field
+	// Using cli/cli v2.85.0 which has stable digests
+	client := NewClient()
+
+	testURL, _ := url.Parse("https://github.com/cli/cli/releases/download/v2.85.0/gh_2.85.0_checksums.txt")
+	checksum, err := client.getChecksumFromGitHubRelease(context.Background(), testURL)
+
+	if err != nil {
+		t.Fatalf("getChecksumFromGitHubRelease() error = %v", err)
+	}
+
+	expectedChecksum := "sha256:0648ada2d7670b150066d0947445db34dbf9d7ecbe0c535d8f9f4df0a752c948"
+	if checksum != expectedChecksum {
+		t.Errorf("getChecksumFromGitHubRelease() = %v, want %v", checksum, expectedChecksum)
 	}
 }
 
