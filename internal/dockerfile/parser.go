@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/containers/image/v5/docker/reference"
+	"github.com/moby/buildkit/frontend/dockerfile/instructions"
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 )
 
@@ -85,7 +86,13 @@ func ParseAllFile(ctx context.Context, path string) (*ParseResult, error) {
 
 // ParseAll parses a Dockerfile from a reader and extracts all references
 func ParseAll(ctx context.Context, r io.Reader) (*ParseResult, error) {
-	result, err := parser.Parse(r)
+	ast, err := parser.Parse(r)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use BuildKit's higher-level instruction parser
+	stages, _, err := instructions.Parse(ast.AST, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -94,33 +101,106 @@ func ParseAll(ctx context.Context, r io.Reader) (*ParseResult, error) {
 		Images:      []ImageRef{},
 		HTTPSources: []HTTPSourceRef{},
 	}
+
+	// Track stage names for detecting multi-stage references
 	stageNames := make(map[string]bool)
 
-	for _, child := range result.AST.Children {
-		switch {
-		case strings.EqualFold(child.Value, "from"):
-			ref, err := parseFromInstruction(child, stageNames)
-			if err != nil {
-				return nil, err
+	for _, stage := range stages {
+		// Extract image reference from stage
+		if ref := extractImageRef(stage, stageNames); ref != nil {
+			parseResult.Images = append(parseResult.Images, *ref)
+		}
+
+		// Track stage name for subsequent stages
+		if stage.Name != "" {
+			stageNames[strings.ToLower(stage.Name)] = true
+		}
+
+		// Extract HTTP sources from ADD commands in this stage
+		for _, cmd := range stage.Commands {
+			if addCmd, ok := cmd.(*instructions.AddCommand); ok {
+				httpRefs := extractHTTPSources(addCmd)
+				parseResult.HTTPSources = append(parseResult.HTTPSources, httpRefs...)
 			}
-			if ref != nil {
-				parseResult.Images = append(parseResult.Images, *ref)
-				// Track the stage name for subsequent FROM instructions
-				if ref.StageName != "" {
-					stageNames[strings.ToLower(ref.StageName)] = true
-				}
-			}
-		case strings.EqualFold(child.Value, "add"):
-			httpRefs := parseAddInstruction(child)
-			parseResult.HTTPSources = append(parseResult.HTTPSources, httpRefs...)
 		}
 	}
 
 	return parseResult, nil
 }
 
+// extractImageRef extracts an image reference from a stage's FROM instruction
+func extractImageRef(stage instructions.Stage, stageNames map[string]bool) *ImageRef {
+	baseName := stage.BaseName
+
+	// Skip scratch base image
+	if strings.EqualFold(baseName, "scratch") {
+		return nil
+	}
+
+	// Skip references to previous build stages (multi-stage builds)
+	if stageNames[strings.ToLower(baseName)] {
+		return nil
+	}
+
+	// Skip references containing unexpanded ARG/ENV variables
+	if containsVariable(baseName) {
+		return nil
+	}
+
+	// Parse the image reference using containers/image library
+	named, err := reference.ParseNormalizedNamed(baseName)
+	if err != nil {
+		// Return nil instead of error - invalid refs are skipped
+		return nil
+	}
+
+	line := 0
+	if len(stage.Location) > 0 {
+		line = stage.Location[0].Start.Line
+	}
+
+	return &ImageRef{
+		Original:  baseName,
+		Ref:       named,
+		Line:      line,
+		StageName: stage.Name,
+	}
+}
+
+// extractHTTPSources extracts HTTP/HTTPS URLs from an ADD command
+func extractHTTPSources(addCmd *instructions.AddCommand) []HTTPSourceRef {
+	// If checksum is already specified, skip this ADD
+	if addCmd.Checksum != "" {
+		return nil
+	}
+
+	var refs []HTTPSourceRef
+	line := 0
+	if locs := addCmd.Location(); len(locs) > 0 {
+		line = locs[0].Start.Line
+	}
+
+	for _, src := range addCmd.SourcePaths {
+		// Skip sources containing unexpanded variables
+		if containsVariable(src) {
+			continue
+		}
+
+		// Only include HTTP/HTTPS URLs
+		if isHTTPURL(src) {
+			refs = append(refs, HTTPSourceRef{
+				URL:         src,
+				Line:        line,
+				HasChecksum: false,
+			})
+		}
+	}
+
+	return refs
+}
+
 // containsVariable checks if the string contains unexpanded ARG/ENV syntax
-// Detects ${VAR}, $VAR patterns (but not $() command substitution which isn't valid in FROM)
+// Detects ${VAR}, $VAR patterns
 func containsVariable(s string) bool {
 	if strings.Contains(s, "${") {
 		return true
@@ -138,102 +218,7 @@ func containsVariable(s string) bool {
 	return false
 }
 
-func parseFromInstruction(node *parser.Node, stageNames map[string]bool) (*ImageRef, error) {
-	if node.Next == nil {
-		return nil, nil
-	}
-
-	original := node.Next.Value
-
-	// Skip scratch base image
-	if strings.EqualFold(original, "scratch") {
-		return nil, nil
-	}
-
-	// Skip references to previous build stages (multi-stage builds)
-	if stageNames[strings.ToLower(original)] {
-		return nil, nil
-	}
-
-	// Skip references containing unexpanded ARG/ENV variables
-	if containsVariable(original) {
-		return nil, nil
-	}
-
-	// Parse the image reference using containers/image library
-	named, err := reference.ParseNormalizedNamed(original)
-	if err != nil {
-		return nil, err
-	}
-
-	ref := &ImageRef{
-		Original: original,
-		Ref:      named,
-		Line:     node.StartLine,
-	}
-
-	// Check for AS clause (named stage)
-	for n := node.Next; n != nil; n = n.Next {
-		if strings.EqualFold(n.Value, "as") && n.Next != nil {
-			ref.StageName = n.Next.Value
-			break
-		}
-	}
-
-	return ref, nil
-}
-
 // isHTTPURL checks if a string is an HTTP or HTTPS URL
 func isHTTPURL(s string) bool {
 	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
-}
-
-// parseAddInstruction extracts HTTP/HTTPS URLs from an ADD instruction
-func parseAddInstruction(node *parser.Node) []HTTPSourceRef {
-	var refs []HTTPSourceRef
-	hasChecksum := false
-
-	// Check for --checksum flag in the instruction flags
-	for _, flag := range node.Flags {
-		if strings.HasPrefix(flag, "--checksum=") {
-			hasChecksum = true
-			break
-		}
-	}
-
-	// If checksum is already specified, we don't need to pin this ADD
-	if hasChecksum {
-		return refs
-	}
-
-	// Collect all arguments (sources and destination)
-	var args []string
-	for n := node.Next; n != nil; n = n.Next {
-		args = append(args, n.Value)
-	}
-
-	// The last argument is the destination, everything else is sources
-	if len(args) < 2 {
-		return refs
-	}
-	sources := args[:len(args)-1]
-
-	// Extract HTTP/HTTPS URLs from sources
-	for _, src := range sources {
-		// Skip sources containing unexpanded variables
-		if containsVariable(src) {
-			continue
-		}
-
-		// Only include HTTP/HTTPS URLs
-		if isHTTPURL(src) {
-			refs = append(refs, HTTPSourceRef{
-				URL:         src,
-				Line:        node.StartLine,
-				HasChecksum: false,
-			})
-		}
-	}
-
-	return refs
 }
