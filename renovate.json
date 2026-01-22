@@ -19,6 +19,15 @@
     {
       "matchDepTypes": ["dependencies"],
       "bumpVersion": "patch"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchFileNames": ["internal/integration/testdata/**"],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "pinDigests": false
     }
   ]
 }
