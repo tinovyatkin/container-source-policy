@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -41,7 +42,7 @@ func NewMockHTTPServer() *MockHTTPServer {
 			hash := sha256.Sum256(content)
 			etag := hex.EncodeToString(hash[:])
 			w.Header().Set("ETag", etag)
-			w.Header().Set("Content-Length", string(rune(len(content))))
+			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
 			w.WriteHeader(http.StatusOK)
 			return
 		}
