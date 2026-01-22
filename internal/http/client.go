@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Client handles HTTP checksum operations
@@ -23,7 +24,9 @@ type Client struct {
 // NewClient creates a new HTTP client
 func NewClient() *Client {
 	return &Client{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{
+			Timeout: 5 * time.Minute, // Allow time for large file downloads
+		},
 	}
 }
 
