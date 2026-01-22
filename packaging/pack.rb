@@ -9,7 +9,12 @@ VERSION = (ENV["VERSION"] || "0.1.0").sub(/^v/, "")
 ROOT = File.join(__dir__, "..")
 DIST = File.join(ROOT, "dist")
 
-PYTHON_PLATFORMS = ["linux", "darwin", "windows", "freebsd"].product(["x86_64", "arm64"])
+# Platforms with binaries and PEP425 wheel tags (no freebsd - no standard wheel tag)
+PYTHON_PLATFORMS = [
+  ["linux", "x86_64"], ["linux", "arm64"],
+  ["darwin", "x86_64"], ["darwin", "arm64"],
+  ["windows", "x86_64"], ["windows", "arm64"]
+].freeze
 
 module Pack
   extend FileUtils
