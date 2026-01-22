@@ -1,7 +1,12 @@
 {
+  // https://golangci-lint.run/docs/welcome/integrations/#visual-studio-code
   "go.lintTool": "golangci-lint",
-  "go.formatTool": "gofmt",
-  "go.formatFlags": ["-s"],
+  "go.lintFlags": ["--path-mode=abs", "--fast-only"],
+  "go.formatTool": "custom",
+  "go.alternateTools": {
+    "customFormatter": "golangci-lint"
+  },
+  "go.formatFlags": ["fmt", "--stdin"],
   "go.useLanguageServer": true,
   "[go]": {
     "editor.snippetSuggestions": "none",
