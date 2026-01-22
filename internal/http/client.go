@@ -238,10 +238,11 @@ func (c *Client) computeChecksum(ctx context.Context, rawURL string) (string, er
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 
+var hexStringRegex = regexp.MustCompile("^[0-9a-fA-F]+$")
+
 // isHexString checks if a string contains only hexadecimal characters
 func isHexString(s string) bool {
-	matched, _ := regexp.MatchString("^[0-9a-fA-F]+$", s)
-	return matched
+	return hexStringRegex.MatchString(s)
 }
 
 // decodeBase64ToHex decodes a base64 string to hex
