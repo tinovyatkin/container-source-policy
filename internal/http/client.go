@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pquerna/cachecontrol/cacheobject"
+
 	"github.com/tinovyatkin/container-source-policy/internal/version"
 )
 
@@ -34,6 +36,23 @@ func (e *AuthError) Error() string {
 func IsAuthError(err error) bool {
 	var authErr *AuthError
 	return errors.As(err, &authErr)
+}
+
+// VolatileContentError indicates an HTTP resource has caching headers that suggest
+// the content changes frequently or should not be cached, making pinning unreliable.
+type VolatileContentError struct {
+	URL    string
+	Reason string
+}
+
+func (e *VolatileContentError) Error() string {
+	return fmt.Sprintf("volatile content at %s (%s)", e.URL, e.Reason)
+}
+
+// IsVolatileContentError checks if an error indicates volatile content
+func IsVolatileContentError(err error) bool {
+	var volatileErr *VolatileContentError
+	return errors.As(err, &volatileErr)
 }
 
 // ChecksumResult contains the checksum and metadata for an HTTP resource
@@ -96,8 +115,8 @@ func (c *Client) GetChecksumWithHeaders(ctx context.Context, rawURL string) (*Ch
 	if err == nil && result.Checksum != "" {
 		return result, nil
 	}
-	// Propagate auth errors immediately
-	if IsAuthError(err) {
+	// Propagate auth errors and volatile content errors immediately
+	if IsAuthError(err) || IsVolatileContentError(err) {
 		return nil, err
 	}
 
@@ -133,6 +152,11 @@ func (c *Client) getChecksumFromHEADWithHeaders(ctx context.Context, rawURL stri
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HEAD request failed: %s", resp.Status)
+	}
+
+	// Check cacheability before processing - volatile content should not be pinned
+	if err := checkCacheability(rawURL, resp.Header); err != nil {
+		return nil, err
 	}
 
 	// Extract checksum
@@ -300,6 +324,11 @@ func (c *Client) computeChecksumWithHeaders(ctx context.Context, rawURL string) 
 		return nil, fmt.Errorf("GET request failed: %s", resp.Status)
 	}
 
+	// Check cacheability before computing checksum - volatile content should not be pinned
+	if err := checkCacheability(rawURL, resp.Header); err != nil {
+		return nil, err
+	}
+
 	hash := sha256.New()
 	if _, err := io.Copy(hash, resp.Body); err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
@@ -345,6 +374,85 @@ func decodeBase64ToHex(b64 string) (string, error) {
 		}
 	}
 	return hex.EncodeToString(decoded), nil
+}
+
+// checkCacheability examines HTTP response headers to detect content that should not be pinned
+// because it's explicitly marked as non-cacheable or volatile.
+//
+// Uses github.com/pquerna/cachecontrol for RFC 7234 compliant header parsing.
+//
+// Returns nil if the content is safe to pin, or a VolatileContentError if pinning is unreliable.
+//
+// Checks:
+//   - Cache-Control: no-store - content must never be cached
+//   - Cache-Control: no-cache - content requires revalidation on every use
+//   - Cache-Control: max-age=0 or s-maxage=0 - content is immediately stale
+//   - Expires header with past date - content is already expired
+//   - Pragma: no-cache - HTTP/1.0 compatibility directive
+//
+// Note: Short max-age values (e.g., 300 seconds) are NOT flagged as volatile because
+// CDNs like raw.githubusercontent.com use short cache times for freshness validation,
+// not because the content actually changes frequently. Pinning such content is still useful.
+//
+// Note: Cache-Control: private is NOT flagged - it indicates cache scope (no shared caches),
+// not content volatility. The content at a given URL is still stable and reproducible.
+func checkCacheability(rawURL string, headers http.Header) error {
+	// Check Pragma header (HTTP/1.0 compatibility)
+	pragma := headers.Get("Pragma")
+	if strings.Contains(strings.ToLower(pragma), "no-cache") {
+		return &VolatileContentError{URL: rawURL, Reason: "Pragma: no-cache"}
+	}
+
+	// Parse Cache-Control header using RFC 7234 compliant library
+	cacheControl := headers.Get("Cache-Control")
+	if cacheControl != "" {
+		directives, err := cacheobject.ParseResponseCacheControl(cacheControl)
+		if err != nil {
+			// Malformed Cache-Control header - be lenient and allow pinning
+			// This follows the robustness principle: accept what others send
+			return nil //nolint:nilerr // intentionally ignoring parse errors to be lenient
+		}
+
+		// Check for explicit non-caching directives
+		if directives.NoStore {
+			return &VolatileContentError{URL: rawURL, Reason: "Cache-Control: no-store"}
+		}
+		if directives.NoCachePresent {
+			return &VolatileContentError{URL: rawURL, Reason: "Cache-Control: no-cache"}
+		}
+		// Note: "private" is intentionally NOT checked - it indicates cache scope
+		// (no shared/proxy caches), not content volatility
+
+		// Check max-age=0 or s-maxage=0 (immediately stale)
+		// DeltaSeconds is -1 when not present, 0 or positive when specified
+		// s-maxage takes precedence over max-age for shared caches
+		effectiveMaxAge := directives.MaxAge
+		if directives.SMaxAge >= 0 {
+			effectiveMaxAge = directives.SMaxAge
+		}
+
+		if effectiveMaxAge == 0 {
+			return &VolatileContentError{URL: rawURL, Reason: "Cache-Control: max-age=0 (immediately stale)"}
+		}
+		// Note: Short but non-zero max-age values (e.g., max-age=300) are allowed
+		// because CDNs commonly use them for freshness validation, not because
+		// content actually changes frequently.
+	}
+
+	// Check Expires header - only flag if already expired
+	// Short-but-future Expires values follow the same logic as max-age
+	expires := headers.Get("Expires")
+	if expires != "" {
+		expiresTime, err := http.ParseTime(expires)
+		if err == nil {
+			if expiresTime.Before(time.Now()) {
+				return &VolatileContentError{URL: rawURL, Reason: "Expires header indicates already expired content"}
+			}
+		}
+		// Invalid Expires header format is ignored per RFC 7234
+	}
+
+	return nil
 }
 
 // extractVaryHeaders extracts request headers that should be included in the source policy

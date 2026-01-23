@@ -89,6 +89,11 @@ func GeneratePolicy(ctx context.Context, opts Options) (*policy.Policy, error) {
 					log.Printf("Warning: Skipping %s (authentication required)", httpRef.URL)
 					continue
 				}
+				// Skip volatile content (short cache lifetime, no-cache directives, etc.)
+				if httpclient.IsVolatileContentError(err) {
+					log.Printf("Warning: Skipping %s (%s)", httpRef.URL, err.Error())
+					continue
+				}
 				return nil, fmt.Errorf("failed to get checksum for %s: %w", httpRef.URL, err)
 			}
 
