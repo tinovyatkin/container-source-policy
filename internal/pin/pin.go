@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/containers/image/v5/docker/reference"
 	"github.com/opencontainers/go-digest"
@@ -83,6 +84,11 @@ func GeneratePolicy(ctx context.Context, opts Options) (*policy.Policy, error) {
 			// Get the checksum for the HTTP resource
 			checksum, err := httpClient.GetChecksum(ctx, httpRef.URL)
 			if err != nil {
+				// Skip resources that require authentication instead of failing
+				if httpclient.IsAuthError(err) {
+					log.Printf("Warning: Skipping %s (authentication required)", httpRef.URL)
+					continue
+				}
 				return nil, fmt.Errorf("failed to get checksum for %s: %w", httpRef.URL, err)
 			}
 

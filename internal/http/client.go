@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,22 @@ import (
 	"strings"
 	"time"
 )
+
+// AuthError indicates an HTTP resource requires authentication
+type AuthError struct {
+	URL        string
+	StatusCode int
+}
+
+func (e *AuthError) Error() string {
+	return fmt.Sprintf("authentication required for %s (HTTP %d)", e.URL, e.StatusCode)
+}
+
+// IsAuthError checks if an error is an authentication error
+func IsAuthError(err error) bool {
+	var authErr *AuthError
+	return errors.As(err, &authErr)
+}
 
 // Client handles HTTP checksum operations
 type Client struct {
@@ -45,13 +62,21 @@ func (c *Client) GetChecksum(ctx context.Context, rawURL string) (string, error)
 		if err == nil && checksum != "" {
 			return checksum, nil
 		}
-		// Fall through to HEAD-based detection on API failure
+		// Propagate auth errors immediately, don't fall through
+		if IsAuthError(err) {
+			return "", err
+		}
+		// Fall through to HEAD-based detection on other failures
 	}
 
 	// Try HEAD request first to detect server type and extract checksums without downloading
 	checksum, err := c.getChecksumFromHEAD(ctx, rawURL)
 	if err == nil && checksum != "" {
 		return checksum, nil
+	}
+	// Propagate auth errors immediately
+	if IsAuthError(err) {
+		return "", err
 	}
 
 	// Fallback: download and compute SHA256
@@ -75,6 +100,11 @@ func (c *Client) getChecksumFromHEAD(ctx context.Context, rawURL string) (string
 		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	// Handle authentication errors gracefully
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return "", &AuthError{URL: rawURL, StatusCode: resp.StatusCode}
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HEAD request failed: %s", resp.Status)
@@ -167,6 +197,12 @@ func (c *Client) getChecksumFromGitHubRelease(ctx context.Context, parsedURL *ur
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Handle authentication errors for private releases
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound {
+		// GitHub returns 404 for private repos/releases without auth
+		return "", &AuthError{URL: parsedURL.String(), StatusCode: resp.StatusCode}
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GitHub API request failed: %s", resp.Status)
 	}
@@ -199,6 +235,11 @@ func (c *Client) computeChecksum(ctx context.Context, rawURL string) (string, er
 		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	// Handle authentication errors gracefully
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return "", &AuthError{URL: rawURL, StatusCode: resp.StatusCode}
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GET request failed: %s", resp.Status)
