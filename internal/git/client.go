@@ -3,6 +3,7 @@ package git
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -91,6 +92,9 @@ func (c *Client) GetCommitChecksum(ctx context.Context, rawURL string) (string, 
 	commitSHA := fields[0]
 	if len(commitSHA) != 40 {
 		return "", fmt.Errorf("invalid commit SHA length: %d", len(commitSHA))
+	}
+	if _, err := hex.DecodeString(commitSHA); err != nil {
+		return "", fmt.Errorf("invalid commit SHA format: not hexadecimal")
 	}
 
 	return commitSHA, nil
