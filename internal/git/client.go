@@ -46,10 +46,15 @@ func ParseGitURL(rawURL string) (*GitRef, error) {
 	if len(parts) == 2 {
 		// Parse fragment: ref[:subdir]
 		fragment := parts[1]
-		refParts := strings.SplitN(fragment, ":", 2)
-		ref = refParts[0]
-		if len(refParts) == 2 {
-			subdir = refParts[1]
+		if fragment != "" {
+			refParts := strings.SplitN(fragment, ":", 2)
+			ref = refParts[0]
+			if ref == "" {
+				ref = "HEAD"
+			}
+			if len(refParts) == 2 {
+				subdir = refParts[1]
+			}
 		}
 	}
 

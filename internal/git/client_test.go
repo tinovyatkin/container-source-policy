@@ -43,6 +43,20 @@ func TestParseGitURL(t *testing.T) {
 			wantSubdir: "",
 		},
 		{
+			name:       "empty fragment defaults to HEAD",
+			rawURL:     "https://github.com/owner/repo.git#",
+			wantRemote: "https://github.com/owner/repo.git",
+			wantRef:    "HEAD",
+			wantSubdir: "",
+		},
+		{
+			name:       "empty ref with subdir defaults ref to HEAD",
+			rawURL:     "https://github.com/owner/repo.git#:subdir",
+			wantRemote: "https://github.com/owner/repo.git",
+			wantRef:    "HEAD",
+			wantSubdir: "subdir",
+		},
+		{
 			name:       "git@ SSH format",
 			rawURL:     "git@github.com:owner/repo.git#branch",
 			wantRemote: "git@github.com:owner/repo.git",
