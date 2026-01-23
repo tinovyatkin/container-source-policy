@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsHexString(t *testing.T) {
@@ -501,6 +502,196 @@ func TestGetChecksumWithHeaders_VaryHeader(t *testing.T) {
 			if tt.checkUserAgent {
 				if _, ok := result.Headers["user-agent"]; !ok {
 					t.Errorf("GetChecksumWithHeaders() missing user-agent header")
+				}
+			}
+		})
+	}
+}
+
+// TestCheckCacheability tests the checkCacheability function
+func TestCheckCacheability(t *testing.T) {
+	tests := []struct {
+		name        string
+		headers     http.Header
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "no caching headers - OK",
+			headers: http.Header{},
+			wantErr: false,
+		},
+		{
+			name: "long max-age - OK",
+			headers: http.Header{
+				"Cache-Control": []string{"max-age=86400"}, // 24 hours
+			},
+			wantErr: false,
+		},
+		{
+			name: "short max-age - OK (CDNs use short cache times for freshness)",
+			headers: http.Header{
+				"Cache-Control": []string{"max-age=300"}, // 5 minutes (like raw.githubusercontent.com)
+			},
+			wantErr: false, // Short max-age is OK - content is still stable
+		},
+		{
+			name: "no-store - volatile",
+			headers: http.Header{
+				"Cache-Control": []string{"no-store"},
+			},
+			wantErr:     true,
+			errContains: "no-store",
+		},
+		{
+			name: "no-cache - volatile",
+			headers: http.Header{
+				"Cache-Control": []string{"no-cache"},
+			},
+			wantErr:     true,
+			errContains: "no-cache",
+		},
+		{
+			name: "private - OK (indicates cache scope, not volatility)",
+			headers: http.Header{
+				"Cache-Control": []string{"private, max-age=3600"},
+			},
+			wantErr: false, // private is about cache scope, content is still stable
+		},
+		{
+			name: "max-age=0 - volatile",
+			headers: http.Header{
+				"Cache-Control": []string{"max-age=0"},
+			},
+			wantErr:     true,
+			errContains: "max-age=0",
+		},
+		{
+			name: "s-maxage=0 overrides max-age - volatile",
+			headers: http.Header{
+				"Cache-Control": []string{"max-age=86400, s-maxage=0"},
+			},
+			wantErr:     true,
+			errContains: "max-age=0",
+		},
+		{
+			name: "Pragma: no-cache - volatile",
+			headers: http.Header{
+				"Pragma": []string{"no-cache"},
+			},
+			wantErr:     true,
+			errContains: "Pragma",
+		},
+		{
+			name: "expired Expires header - volatile",
+			headers: http.Header{
+				"Expires": []string{"Thu, 01 Jan 1970 00:00:00 GMT"},
+			},
+			wantErr:     true,
+			errContains: "expired",
+		},
+		{
+			name: "short Expires - OK (like short max-age)",
+			headers: http.Header{
+				"Expires": []string{time.Now().Add(5 * time.Minute).UTC().Format(http.TimeFormat)},
+			},
+			wantErr: false, // Short but future Expires is OK
+		},
+		{
+			name: "invalid Expires header - ignored (OK)",
+			headers: http.Header{
+				"Expires": []string{"invalid-date"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "public with long max-age - OK",
+			headers: http.Header{
+				"Cache-Control": []string{"public, max-age=31536000"}, // 1 year
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkCacheability("https://example.com/file.txt", tt.headers)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("checkCacheability() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && tt.errContains != "" && err != nil {
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
+			}
+			if tt.wantErr && err != nil {
+				if !IsVolatileContentError(err) {
+					t.Errorf("expected VolatileContentError, got %T", err)
+				}
+			}
+		})
+	}
+}
+
+// TestGetChecksumWithHeaders_VolatileContent tests that volatile content is properly rejected
+func TestGetChecksumWithHeaders_VolatileContent(t *testing.T) {
+	content := []byte("test content")
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+		wantErr bool
+	}{
+		{
+			name: "no-store returns error",
+			headers: map[string]string{
+				"Cache-Control": "no-store",
+			},
+			wantErr: true,
+		},
+		{
+			name: "max-age=0 returns error",
+			headers: map[string]string{
+				"Cache-Control": "max-age=0",
+			},
+			wantErr: true,
+		},
+		{
+			name: "cacheable content returns checksum",
+			headers: map[string]string{
+				"Cache-Control": "max-age=86400",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				for k, v := range tt.headers {
+					w.Header().Set(k, v)
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(content)
+			}))
+			defer server.Close()
+
+			client := NewClient()
+			result, err := client.GetChecksumWithHeaders(context.Background(), server.URL)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetChecksumWithHeaders() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				if !IsVolatileContentError(err) {
+					t.Errorf("expected VolatileContentError, got %T: %v", err, err)
+				}
+			} else {
+				if result == nil || result.Checksum == "" {
+					t.Error("expected non-empty checksum result")
 				}
 			}
 		})

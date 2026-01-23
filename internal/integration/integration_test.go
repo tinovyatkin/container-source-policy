@@ -3,9 +3,11 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -164,6 +166,110 @@ func TestPin(t *testing.T) {
 
 			snaps.WithConfig(snaps.Ext(".json")).MatchStandaloneSnapshot(t, string(output))
 		})
+	}
+}
+
+// TestPinHTTPSourcesVolatileContent tests that HTTP sources with volatile cache headers are skipped
+func TestPinHTTPSourcesVolatileContent(t *testing.T) {
+	// Create mock HTTP server
+	mockHTTP := testutil.NewMockHTTPServer()
+	defer mockHTTP.Close()
+
+	// Add a volatile file (no-store cache control) - should be skipped
+	mockHTTP.AddFileWithHeaders("/volatile/file.txt", "volatile content", map[string]string{
+		"Cache-Control": "no-store",
+	})
+
+	// Add a stable file (long max-age) - should be pinned
+	stableChecksum := mockHTTP.AddFileWithHeaders("/stable/file.txt", "stable content", map[string]string{
+		"Cache-Control": "max-age=86400",
+	})
+
+	// Create a temporary Dockerfile with both URLs
+	tmpDir := t.TempDir()
+	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
+	dockerfileContent := `FROM alpine:3.18
+ADD ` + mockHTTP.URL() + `/volatile/file.txt /app/volatile.txt
+ADD ` + mockHTTP.URL() + `/stable/file.txt /app/stable.txt
+`
+	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reset request tracking
+	mockRegistry.ResetRequests()
+	mockHTTP.ResetRequests()
+
+	// Run the pin command - capture stderr separately to check for warning
+	cmd := exec.Command(binaryPath, "pin", "--stdout", dockerfilePath)
+	cmd.Env = append(os.Environ(), "CONTAINERS_REGISTRIES_CONF="+registryConf)
+	output, err := cmd.Output() // Use Output() instead of CombinedOutput() to get only stdout
+	if err != nil {
+		// Check if there's stderr output (expected warning)
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			t.Fatalf("command failed: %v\nstderr: %s", err, exitErr.Stderr)
+		}
+		t.Fatalf("command failed: %v", err)
+	}
+
+	// Verify volatile file was hit (HEAD request) before being rejected
+	if !mockHTTP.HasRequest("/volatile/file.txt") {
+		t.Errorf(
+			"expected mock HTTP server to be hit for volatile file, but it wasn't.\nRequests: %v",
+			mockHTTP.Requests(),
+		)
+	}
+
+	// Verify stable file was hit
+	if !mockHTTP.HasRequest("/stable/file.txt") {
+		t.Errorf(
+			"expected mock HTTP server to be hit for stable file, but it wasn't.\nRequests: %v",
+			mockHTTP.Requests(),
+		)
+	}
+
+	// Parse the output
+	var pol policy.Policy
+	if err := json.Unmarshal(output, &pol); err != nil {
+		t.Fatalf("failed to parse policy output: %v\noutput: %s", err, output)
+	}
+
+	// Validate the policy
+	if err := policy.Validate(&pol); err != nil {
+		t.Fatalf("policy validation failed: %v", err)
+	}
+	if err := policy.ValidateWithEvaluate(context.Background(), &pol); err != nil {
+		t.Fatalf("policy engine evaluation failed: %v", err)
+	}
+
+	// Should have 2 rules: alpine:3.18 and stable HTTP file (volatile should be skipped)
+	if len(pol.Rules) != 2 {
+		t.Errorf("expected 2 rules (alpine + stable HTTP, volatile skipped), got %d", len(pol.Rules))
+	}
+
+	// Verify the HTTP rule is for the stable file, not the volatile one
+	foundStableRule := false
+	for _, rule := range pol.Rules {
+		selector := rule.GetSelector()
+		if selector != nil && strings.Contains(selector.GetIdentifier(), "/stable/file.txt") {
+			foundStableRule = true
+			// Verify the checksum is correct
+			updates := rule.GetUpdates()
+			if updates != nil && updates.GetAttrs() != nil {
+				if updates.GetAttrs()["http.checksum"] != stableChecksum {
+					t.Errorf("expected checksum %s, got %s", stableChecksum, updates.GetAttrs()["http.checksum"])
+				}
+			}
+		}
+		// Verify there's no rule for the volatile file
+		if selector != nil && strings.Contains(selector.GetIdentifier(), "/volatile/file.txt") {
+			t.Errorf("unexpected rule for volatile file - should have been skipped")
+		}
+	}
+
+	if !foundStableRule {
+		t.Error("expected rule for stable HTTP file not found")
 	}
 }
 

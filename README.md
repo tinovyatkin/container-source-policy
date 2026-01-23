@@ -106,6 +106,7 @@ container-source-policy completion zsh
   - `ADD --checksum=… <url>` (already pinned)
   - URLs containing unexpanded variables (`${VAR}`, `$VAR`)
   - Git URLs (handled separately, see below)
+  - Volatile content (emits warning): URLs returning `Cache-Control: no-store`, `no-cache`, `max-age=0`, or expired `Expires` headers
 - Fetches the checksum and emits `CONVERT` rules with `http.checksum` attribute.
 - **Respects `Vary` header**: captures request headers that affect response content (e.g., `User-Agent`, `Accept-Encoding`) and includes them in the policy as `http.header.*` attributes to ensure reproducible builds.
 
