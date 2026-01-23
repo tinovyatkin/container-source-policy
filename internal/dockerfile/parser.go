@@ -147,6 +147,11 @@ func extractImageRef(stage instructions.Stage, stageNames map[string]bool) *Imag
 		return nil
 	}
 
+	// Skip images already pinned by digest (e.g., name@sha256:...)
+	if strings.Contains(baseName, "@sha256:") {
+		return nil
+	}
+
 	// Parse the image reference using containers/image library
 	named, err := reference.ParseNormalizedNamed(baseName)
 	if err != nil {

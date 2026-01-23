@@ -118,6 +118,11 @@ func TestParse(t *testing.T) {
 			dockerfile: "ARG BASE_IMAGE=alpine:3.18\nFROM ${BASE_IMAGE}",
 			wantCount:  0,
 		},
+		{
+			name:       "already digested image is skipped",
+			dockerfile: "FROM alpine@sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abcd",
+			wantCount:  0,
+		},
 	}
 
 	for _, tt := range tests {
