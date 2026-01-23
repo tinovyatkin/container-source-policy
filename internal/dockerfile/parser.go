@@ -3,6 +3,7 @@ package dockerfile
 import (
 	"context"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -225,5 +226,10 @@ func containsVariable(s string) bool {
 
 // isHTTPURL checks if a string is an HTTP or HTTPS URL
 func isHTTPURL(s string) bool {
-	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	return scheme == "http" || scheme == "https"
 }

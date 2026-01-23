@@ -188,6 +188,20 @@ func TestParseAll_HTTPSources(t *testing.T) {
 			wantHTTPURLs:   []string{"http://example.com/file.txt"},
 		},
 		{
+			name:           "ADD with uppercase HTTPS scheme",
+			dockerfile:     "FROM alpine:3.18\nADD HTTPS://example.com/file.txt /app/",
+			wantHTTPCount:  1,
+			wantImageCount: 1,
+			wantHTTPURLs:   []string{"HTTPS://example.com/file.txt"},
+		},
+		{
+			name:           "ADD with mixed case Http scheme",
+			dockerfile:     "FROM alpine:3.18\nADD Http://example.com/file.txt /app/",
+			wantHTTPCount:  1,
+			wantImageCount: 1,
+			wantHTTPURLs:   []string{"Http://example.com/file.txt"},
+		},
+		{
 			name:           "ADD with --checksum is skipped",
 			dockerfile:     "FROM alpine:3.18\nADD --checksum=sha256:abc123 https://example.com/file.txt /app/",
 			wantHTTPCount:  0,
