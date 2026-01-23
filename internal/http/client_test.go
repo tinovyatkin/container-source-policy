@@ -237,6 +237,14 @@ func TestGetChecksumFromGitHubRelease(t *testing.T) {
 			wantErr:      false,
 		},
 		{
+			name:         "percent-encoded asset name",
+			path:         "/owner/repo/releases/download/v1.0.0/file%20name.tar.gz",
+			responseCode: http.StatusOK,
+			responseBody: `{"assets":[{"name":"file name.tar.gz","digest":"sha256:def456"}]}`,
+			wantChecksum: "sha256:def456",
+			wantErr:      false,
+		},
+		{
 			name:         "asset not found in release",
 			path:         "/cli/cli/releases/download/v2.50.0/nonexistent.tar.gz",
 			responseCode: http.StatusOK,

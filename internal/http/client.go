@@ -138,7 +138,13 @@ func (c *Client) getChecksumFromGitHubRelease(ctx context.Context, parsedURL *ur
 	// pathParts[2] = "releases"
 	// pathParts[3] = "download"
 	tag := pathParts[4]
-	assetName := strings.Join(pathParts[5:], "/")
+	rawAssetName := strings.Join(pathParts[5:], "/")
+
+	// URL-decode the asset name to match GitHub API response (which returns unencoded names)
+	assetName, err := url.PathUnescape(rawAssetName)
+	if err != nil {
+		return "", fmt.Errorf("invalid asset name encoding: %w", err)
+	}
 
 	// Query the GitHub API for the release
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", owner, repo, tag)
