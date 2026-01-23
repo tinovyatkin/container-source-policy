@@ -84,6 +84,9 @@ func AddHTTPChecksumRule(p *Policy, url, checksum string) {
 // through the BuildKit sourcepolicy/pb types. This is the same validation
 // that BuildKit performs when loading a policy file via json.Unmarshal.
 func Validate(p *Policy) error {
+	if p == nil {
+		return fmt.Errorf("policy is nil")
+	}
 	data, err := json.Marshal(p)
 	if err != nil {
 		return err
