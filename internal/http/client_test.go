@@ -157,30 +157,20 @@ func TestGetChecksumFromHEAD(t *testing.T) {
 			wantErr:      false,
 		},
 		{
-			name: "S3 with SHA1 checksum header (fallback)",
+			name: "S3 with SHA1 only falls back (BuildKit requires SHA256)",
 			headers: map[string]string{
 				"Server":              "AmazonS3",
 				"x-amz-checksum-sha1": "Lve95gjOVATpfV8EL5X4nxwjKHE=",
 			},
 			statusCode:   http.StatusOK,
-			wantChecksum: "sha1:2ef7bde608ce5404e97d5f042f95f89f1c232871",
-			wantErr:      false,
+			wantChecksum: "",
+			wantErr:      true,
 		},
 		{
-			name: "S3 with MD5 ETag for single-part upload",
+			name: "S3 with MD5 ETag falls back (BuildKit requires SHA256)",
 			headers: map[string]string{
 				"Server": "AmazonS3",
 				"ETag":   "\"098f6bcd4621d373cade4e832627b4f6\"",
-			},
-			statusCode:   http.StatusOK,
-			wantChecksum: "md5:098f6bcd4621d373cade4e832627b4f6",
-			wantErr:      false,
-		},
-		{
-			name: "S3 multipart ETag is skipped",
-			headers: map[string]string{
-				"Server": "AmazonS3",
-				"ETag":   "\"098f6bcd4621d373cade4e832627b4f6-5\"",
 			},
 			statusCode:   http.StatusOK,
 			wantChecksum: "",

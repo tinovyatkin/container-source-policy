@@ -96,9 +96,11 @@ func (c *Client) getChecksumFromHEAD(ctx context.Context, rawURL string) (string
 	return "", fmt.Errorf("no usable checksum found in headers")
 }
 
-// extractS3Checksum extracts checksum from S3 response headers
+// extractS3Checksum extracts SHA-256 checksum from S3 response headers.
+// BuildKit's http.checksum only supports SHA-256, so we only look for that.
+// If unavailable, caller should fall back to downloading and computing SHA-256.
 func (c *Client) extractS3Checksum(resp *http.Response) (string, error) {
-	// Check for explicit S3 checksums (preferred - these are reliable)
+	// Check for explicit S3 SHA-256 checksum (the only algorithm BuildKit supports)
 	if sha256Checksum := resp.Header.Get("x-amz-checksum-sha256"); sha256Checksum != "" {
 		// S3 returns base64-encoded checksum, convert to hex
 		decoded, err := decodeBase64ToHex(sha256Checksum)
@@ -107,24 +109,8 @@ func (c *Client) extractS3Checksum(resp *http.Response) (string, error) {
 		}
 	}
 
-	if sha1Checksum := resp.Header.Get("x-amz-checksum-sha1"); sha1Checksum != "" {
-		decoded, err := decodeBase64ToHex(sha1Checksum)
-		if err == nil {
-			return "sha1:" + decoded, nil
-		}
-	}
-
-	// Check ETag for single-part uploads (MD5)
-	// Only use if it doesn't have a multipart suffix (-N)
-	etag := resp.Header.Get("ETag")
-	etag = strings.Trim(etag, `"`)
-	if etag != "" && !strings.Contains(etag, "-") && len(etag) == 32 && isHexString(etag) {
-		// This is likely an MD5 from a single-part upload
-		// Note: MD5 is weaker than SHA256, but better than nothing
-		return "md5:" + etag, nil
-	}
-
-	return "", fmt.Errorf("no usable checksum found in S3 headers")
+	// No SHA-256 available from headers - caller will fall back to computing it
+	return "", fmt.Errorf("no SHA-256 checksum found in S3 headers")
 }
 
 // GitHubReleaseAsset represents a release asset from the GitHub API
