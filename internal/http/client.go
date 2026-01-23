@@ -167,48 +167,13 @@ func (c *Client) getChecksumFromHEADWithHeaders(ctx context.Context, rawURL stri
 // getChecksumFromHEAD makes a HEAD request and tries to extract checksum from response headers.
 // It detects S3 from the Server header (more reliable than URL pattern matching) and handles
 // various server-specific checksum formats.
+// This is a convenience wrapper around getChecksumFromHEADWithHeaders that discards header metadata.
 func (c *Client) getChecksumFromHEAD(ctx context.Context, rawURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, rawURL, nil)
+	result, err := c.getChecksumFromHEADWithHeaders(ctx, rawURL)
 	if err != nil {
 		return "", err
 	}
-
-	// Set User-Agent to identify the tool making requests
-	// Matches BuildKit's convention: "buildkit/{version}"
-	req.Header.Set("User-Agent", version.UserAgent())
-
-	// Request S3 checksums if available (this header is ignored by non-S3 servers)
-	req.Header.Set("x-amz-checksum-mode", "ENABLED")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Handle authentication errors gracefully
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return "", &AuthError{URL: rawURL, StatusCode: resp.StatusCode}
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HEAD request failed: %s", resp.Status)
-	}
-
-	// Detect S3 from Server header (more reliable than URL pattern matching)
-	server := resp.Header.Get("Server")
-	if server == "AmazonS3" {
-		return c.extractS3Checksum(resp)
-	}
-
-	// Check for raw.githubusercontent.com ETag pattern (SHA256 hash)
-	etag := resp.Header.Get("ETag")
-	etag = strings.Trim(etag, `"`)
-	if len(etag) == 64 && isHexString(etag) {
-		return "sha256:" + etag, nil
-	}
-
-	return "", fmt.Errorf("no usable checksum found in headers")
+	return result.Checksum, nil
 }
 
 // extractS3Checksum extracts SHA-256 checksum from S3 response headers.
@@ -354,36 +319,13 @@ func (c *Client) computeChecksumWithHeaders(ctx context.Context, rawURL string) 
 }
 
 // computeChecksum downloads the content and computes SHA256
+// This is a convenience wrapper around computeChecksumWithHeaders that discards header metadata.
 func (c *Client) computeChecksum(ctx context.Context, rawURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	result, err := c.computeChecksumWithHeaders(ctx, rawURL)
 	if err != nil {
 		return "", err
 	}
-
-	// Set User-Agent to identify the tool making requests
-	req.Header.Set("User-Agent", version.UserAgent())
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Handle authentication errors gracefully
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return "", &AuthError{URL: rawURL, StatusCode: resp.StatusCode}
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET request failed: %s", resp.Status)
-	}
-
-	hash := sha256.New()
-	if _, err := io.Copy(hash, resp.Body); err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
+	return result.Checksum, nil
 }
 
 var hexStringRegex = regexp.MustCompile("^[0-9a-fA-F]+$")
