@@ -24,14 +24,13 @@ type ImageRef struct {
 	StageName string
 }
 
-// HTTPSourceRef represents an HTTP/HTTPS source reference extracted from a Dockerfile ADD instruction
+// HTTPSourceRef represents an HTTP/HTTPS source reference extracted from a Dockerfile ADD instruction.
+// Note: ADD instructions with --checksum flag are excluded (already pinned).
 type HTTPSourceRef struct {
 	// URL is the HTTP/HTTPS URL as it appears in the Dockerfile
 	URL string
 	// Line is the line number in the Dockerfile where this reference appears
 	Line int
-	// HasChecksum indicates whether the ADD instruction already has a --checksum flag
-	HasChecksum bool
 }
 
 // ParseResult contains all extracted references from a Dockerfile
@@ -195,9 +194,8 @@ func extractHTTPSources(addCmd *instructions.AddCommand) []HTTPSourceRef {
 		// Only include HTTP/HTTPS URLs
 		if isHTTPURL(src) {
 			refs = append(refs, HTTPSourceRef{
-				URL:         src,
-				Line:        line,
-				HasChecksum: false,
+				URL:  src,
+				Line: line,
 			})
 		}
 	}
