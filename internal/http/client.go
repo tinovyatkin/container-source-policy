@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/tinovyatkin/container-source-policy/internal/version"
 )
 
 // AuthError indicates an HTTP resource requires authentication
@@ -91,6 +93,10 @@ func (c *Client) getChecksumFromHEAD(ctx context.Context, rawURL string) (string
 	if err != nil {
 		return "", err
 	}
+
+	// Set User-Agent to identify the tool making requests
+	// Matches BuildKit's convention: "buildkit/{version}"
+	req.Header.Set("User-Agent", version.UserAgent())
 
 	// Request S3 checksums if available (this header is ignored by non-S3 servers)
 	req.Header.Set("x-amz-checksum-mode", "ENABLED")
@@ -183,6 +189,7 @@ func (c *Client) getChecksumFromGitHubRelease(ctx context.Context, parsedURL *ur
 	if err != nil {
 		return "", err
 	}
+	req.Header.Set("User-Agent", version.UserAgent())
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
@@ -229,6 +236,9 @@ func (c *Client) computeChecksum(ctx context.Context, rawURL string) (string, er
 	if err != nil {
 		return "", err
 	}
+
+	// Set User-Agent to identify the tool making requests
+	req.Header.Set("User-Agent", version.UserAgent())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

@@ -1,5 +1,7 @@
 package version
 
+import "fmt"
+
 var (
 	version = "dev"
 	commit  = "unknown"
@@ -16,4 +18,10 @@ func Version() string {
 // Commit returns the git commit hash
 func Commit() string {
 	return commit
+}
+
+// UserAgent returns a User-Agent string for HTTP requests
+// Format matches BuildKit's convention: "container-source-policy/{version}"
+func UserAgent() string {
+	return fmt.Sprintf("container-source-policy/%s", version)
 }
