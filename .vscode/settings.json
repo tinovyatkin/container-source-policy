@@ -16,5 +16,6 @@
       "source.organizeImports": "explicit"
     },
     "editor.defaultFormatter": "golang.go"
-  }
+  },
+  "makefile.configureOnOpen": false
 }
