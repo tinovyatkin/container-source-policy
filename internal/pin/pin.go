@@ -151,20 +151,20 @@ type resultCollector struct {
 
 func (r *resultCollector) addPin(result pinResult) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.pinResults = append(r.pinResults, result)
-	r.mu.Unlock()
 }
 
 func (r *resultCollector) addHTTP(result httpResult) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.httpResults = append(r.httpResults, result)
-	r.mu.Unlock()
 }
 
 func (r *resultCollector) addGit(result gitResult) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.gitResults = append(r.gitResults, result)
-	r.mu.Unlock()
 }
 
 func (r *resultCollector) buildPolicy() *policy.Policy {
