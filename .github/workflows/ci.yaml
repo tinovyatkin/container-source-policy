@@ -24,14 +24,21 @@ jobs:
       - name: Build
         run: go build ./...
 
-      - name: Test with coverage
+      - name: Run unit tests with coverage
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./...
+
+      - name: Run integration tests with coverage
+        run: |
+          # Integration tests use -cover build and write binary coverage data
+          go test ./internal/integration/... -v
+          # Convert binary coverage data to text format
+          go tool covdata textfmt -i=coverage -o=coverage-integration.txt
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
-          files: coverage.out
+          files: coverage.out,coverage-integration.txt
           fail_ci_if_error: true
 
   lint:

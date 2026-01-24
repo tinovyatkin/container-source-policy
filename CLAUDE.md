@@ -40,6 +40,36 @@ go run . pin --help
 go run . pin --stdout Dockerfile
 ```
 
+## Coverage Collection
+
+Integration tests are built with coverage instrumentation (`-cover` flag). Coverage data is automatically collected to a temporary directory during test runs.
+
+```bash
+# Run integration tests (coverage data is automatically collected)
+go test ./internal/integration/...
+
+# To view coverage reports, manually run with a persistent coverage directory:
+# 1. Build the binary with coverage
+go build -cover -o container-source-policy-cover .
+
+# 2. Run tests with GOCOVERDIR set
+mkdir coverage
+GOCOVERDIR=coverage go test ./internal/integration/...
+
+# 3. Generate coverage reports
+# View coverage percentages
+go tool covdata percent -i=coverage
+
+# Convert to text format for detailed reports
+go tool covdata textfmt -i=coverage -o=coverage.txt
+
+# Generate HTML report
+go tool cover -html=coverage.txt -o=coverage.html
+
+# View coverage for specific packages
+go tool covdata percent -i=coverage -pkg=github.com/tinovyatkin/container-source-policy/internal/pin
+```
+
 ## Commit Messages
 
 - Use semantic commit rules (Conventional Commits), e.g. `feat: …`, `fix: …`, `chore: …` (enforced via `commitlint` in `.lefthook.yml`).

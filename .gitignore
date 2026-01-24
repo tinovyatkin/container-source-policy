@@ -13,9 +13,12 @@
 
 # Code coverage profiles and other test artifacts
 *.out
+coverage/
 coverage.*
 *.coverprofile
 profile.cov
+covcounters.*
+covmeta.*
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
