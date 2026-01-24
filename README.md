@@ -1,5 +1,7 @@
 # container-source-policy
 
+[![codecov](https://codecov.io/gh/tinovyatkin/container-source-policy/graph/badge.svg?token=tSSxWyOmP2)](https://codecov.io/gh/tinovyatkin/container-source-policy)
+
 Generate a Docker BuildKit **source policy** file by parsing Dockerfiles and pinning `FROM` images to immutable digests.
 
 This helps make `docker buildx build` inputs reproducible without rewriting your Dockerfile.
@@ -102,9 +104,11 @@ buildctl build --frontend dockerfile.v0 --local dockerfile=. --local context=. -
   - Git URLs (handled separately, see below)
   - Volatile content (emits warning): URLs returning `Cache-Control: no-store`, `no-cache`, `max-age=0`, or expired `Expires` headers
 - Fetches the checksum and emits `CONVERT` rules with `http.checksum` attribute.
-- **Respects `Vary` header**: captures request headers that affect response content (e.g., `User-Agent`, `Accept-Encoding`) and includes them in the policy as `http.header.*` attributes to ensure reproducible builds.
+- **Respects `Vary` header**: captures request headers that affect response content (e.g., `User-Agent`, `Accept-Encoding`) and includes them in the
+  policy as `http.header.*` attributes to ensure reproducible builds.
 
 **Optimized checksum fetching** — avoids downloading large files when possible:
+
 - `raw.githubusercontent.com`: extracts SHA256 from ETag header
 - GitHub releases: uses the API `digest` field (set `GITHUB_TOKEN` for higher rate limits)
 - S3: uses `x-amz-checksum-sha256` response header (by sending `x-amz-checksum-mode: ENABLED`)
