@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/term"
 
+	"github.com/tinovyatkin/container-source-policy/internal/dhi"
 	"github.com/tinovyatkin/container-source-policy/internal/dockerfile"
 	"github.com/tinovyatkin/container-source-policy/internal/git"
 	httpclient "github.com/tinovyatkin/container-source-policy/internal/http"
@@ -31,6 +33,7 @@ import (
 // Options configures the pin operation
 type Options struct {
 	Dockerfiles []string
+	PreferDHI   bool // Prefer Docker Hardened Images (dhi.io) when available
 }
 
 // imageTask represents an image to pin
@@ -203,18 +206,37 @@ func GeneratePolicy(ctx context.Context, opts Options) (*policy.Policy, error) {
 		return policy.NewPolicy(), nil
 	}
 
+	registryClient := registry.NewClient()
+
+	// Phase 1.5: If DHI preference is enabled, verify authentication upfront
+	if opts.PreferDHI {
+		// Check if any images are eligible for DHI
+		hasDHIEligible := false
+		for _, task := range collector.imageTasks {
+			if dhi.CanMapToDHI(task.ref) {
+				hasDHIEligible = true
+				break
+			}
+		}
+
+		if hasDHIEligible {
+			if err := registryClient.CheckAuth(ctx, dhi.Registry); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Phase 2: Process all sources concurrently with progress bars
 	progress := newProgressContainer()
 	results := &resultCollector{}
 
-	registryClient := registry.NewClient()
 	baseHTTPClient := httpclient.NewClient()
 	gitClient := git.NewClient()
 
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, task := range collector.imageTasks {
-		g.Go(processImage(ctx, task, registryClient, progress, results))
+		g.Go(processImage(ctx, task, registryClient, progress, results, opts.PreferDHI))
 	}
 
 	for _, task := range collector.httpTasks {
@@ -250,6 +272,7 @@ func processImage(
 	client *registry.Client,
 	progress *mpb.Progress,
 	results *resultCollector,
+	preferDHI bool,
 ) func() error {
 	return func() error {
 		name := truncateLeft(task.original, 40)
@@ -265,10 +288,41 @@ func processImage(
 		)
 		defer bar.SetTotal(0, true)
 
-		digestStr, err := client.GetDigest(ctx, task.ref)
-		if err != nil {
-			bar.Abort(true)
-			return fmt.Errorf("failed to get digest for %s: %w", task.original, err)
+		var pinnedRef reference.Named
+		var digestStr string
+		var err error
+
+		// Try DHI (Docker Hardened Images) first if enabled
+		if preferDHI && dhi.CanMapToDHI(task.ref) {
+			dhiRef, mapErr := dhi.MapToDHI(task.ref)
+			if mapErr != nil {
+				if !errors.Is(mapErr, dhi.ErrNotEligible) {
+					bar.Abort(true)
+					return fmt.Errorf("failed to map DHI reference for %s: %w", task.original, mapErr)
+				}
+			} else if dhiRef != nil {
+				dhiDigest, dhiErr := client.GetDigest(ctx, dhiRef)
+				if dhiErr == nil {
+					// DHI image exists, use it
+					digestStr = dhiDigest
+					pinnedRef = dhiRef
+				} else if !registry.IsNotFoundOrAuthError(dhiErr) {
+					// Unexpected error (network issue, etc.) - fail the operation
+					bar.Abort(true)
+					return fmt.Errorf("failed to check DHI image %s: %w", dhiRef.String(), dhiErr)
+				}
+				// else: DHI not found or auth error, fall back to original below
+			}
+		}
+
+		// Fall back to original image if DHI not used or not found
+		if pinnedRef == nil {
+			digestStr, err = client.GetDigest(ctx, task.ref)
+			if err != nil {
+				bar.Abort(true)
+				return fmt.Errorf("failed to get digest for %s: %w", task.original, err)
+			}
+			pinnedRef = task.ref
 		}
 
 		d, err := digest.Parse(digestStr)
@@ -277,7 +331,7 @@ func processImage(
 			return fmt.Errorf("failed to parse digest %s: %w", digestStr, err)
 		}
 
-		pinnedRef, err := reference.WithDigest(task.ref, d)
+		pinnedRefWithDigest, err := reference.WithDigest(pinnedRef, d)
 		if err != nil {
 			bar.Abort(true)
 			return fmt.Errorf("failed to create pinned reference for %s: %w", task.original, err)
@@ -286,7 +340,7 @@ func processImage(
 		results.addPin(pinResult{
 			index:    task.index,
 			original: task.original,
-			pinned:   pinnedRef.String(),
+			pinned:   pinnedRefWithDigest.String(),
 		})
 
 		return nil

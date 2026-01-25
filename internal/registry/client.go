@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/containers/image/v5/docker"
 	"github.com/containers/image/v5/docker/reference"
@@ -67,4 +68,80 @@ func (c *Client) GetDigest(ctx context.Context, ref reference.Named) (string, er
 	}
 
 	return digest.String(), nil
+}
+
+// isNotFoundError checks if the lowercase error string indicates a "not found" condition.
+func isNotFoundError(errStr string) bool {
+	return strings.Contains(errStr, "404") ||
+		strings.Contains(errStr, "not found") ||
+		strings.Contains(errStr, "manifest unknown") ||
+		strings.Contains(errStr, "name unknown") ||
+		strings.Contains(errStr, "unknown name") ||
+		strings.Contains(errStr, "does not exist")
+}
+
+// isAuthError checks if the lowercase error string indicates an authentication error.
+func isAuthError(errStr string) bool {
+	return strings.Contains(errStr, "401") ||
+		strings.Contains(errStr, "403") ||
+		strings.Contains(errStr, "unauthorized") ||
+		strings.Contains(errStr, "authentication required") ||
+		strings.Contains(errStr, "denied")
+}
+
+// CheckAuth verifies that the client can authenticate to a registry.
+// It does this by attempting to access an image reference, which triggers auth.
+// Returns nil if authentication succeeds (even if image doesn't exist),
+// or an error describing the auth failure.
+func (c *Client) CheckAuth(ctx context.Context, registry string) error {
+	// Try to access a reference to trigger auth
+	// The image doesn't need to exist - we just need to verify auth works
+	refStr := registry + "/auth-check:test"
+	ref, err := reference.ParseNormalizedNamed(refStr)
+	if err != nil {
+		return fmt.Errorf("invalid registry reference: %w", err)
+	}
+
+	imgRef, err := docker.NewReference(ref)
+	if err != nil {
+		return fmt.Errorf("failed to create docker reference: %w", err)
+	}
+
+	// Try to create an image source - this will trigger authentication
+	imgSrc, err := imgRef.NewImageSource(ctx, c.sysCtx)
+	if err != nil {
+		errStr := strings.ToLower(err.Error())
+
+		// 404/not found means auth succeeded but image doesn't exist - that's OK
+		if isNotFoundError(errStr) {
+			return nil
+		}
+
+		// Check if it's an auth error
+		if isAuthError(errStr) {
+			return fmt.Errorf("authentication failed for %s: run 'docker login %s' first", registry, registry)
+		}
+		return fmt.Errorf("failed to connect to %s: %w", registry, err)
+	}
+	_ = imgSrc.Close()
+
+	return nil
+}
+
+// IsNotFoundOrAuthError checks if an error indicates that an image was not found
+// or that authentication is required. These are expected errors when checking
+// for DHI equivalents that may not exist.
+//
+// Returns true for:
+//   - 404 Not Found (image doesn't exist)
+//   - 401 Unauthorized (authentication required)
+//   - 403 Forbidden (access denied)
+//   - "manifest unknown" errors (common registry response for missing images)
+func IsNotFoundOrAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := strings.ToLower(err.Error())
+	return isNotFoundError(errStr) || isAuthError(errStr)
 }

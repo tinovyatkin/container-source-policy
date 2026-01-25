@@ -82,11 +82,17 @@ func TestMain(m *testing.M) {
 		tag  string
 		seed int64
 	}{
+		// Docker Hub library images (docker.io/library/*)
 		{"library/alpine", "3.18", 1},
 		{"library/golang", "1.21", 2},
 		{"actions/actions-runner", "latest", 3},
 		{"library/busybox", "1.36", 4},
 		{"library/nginx", "1.25", 5},
+		// DHI equivalents (dhi.io/*) - use different seeds for different digests
+		{"alpine", "3.18", 101},
+		{"golang", "1.21", 102},
+		{"busybox", "1.36", 104},
+		{"nginx", "1.25", 105},
 	}
 
 	for _, img := range images {
@@ -98,7 +104,8 @@ func TestMain(m *testing.M) {
 	}
 
 	// Create registries.conf that redirects all registries to our mock
-	registryConf, err = mockRegistry.WriteRegistriesConf(tmpDir)
+	// Include dhi.io for DHI preference testing
+	registryConf, err = mockRegistry.WriteRegistriesConf(tmpDir, "docker.io", "ghcr.io", "gcr.io", "quay.io", "dhi.io")
 	if err != nil {
 		mockRegistry.Close()
 		_ = os.RemoveAll(tmpDir)
@@ -116,32 +123,65 @@ func TestPin(t *testing.T) {
 	testCases := []struct {
 		name           string
 		dir            string
+		args           []string // additional CLI args
 		expectedImages []string // image paths that should be fetched from mock registry
 		requiresNet    bool     // skip in short mode if true
 	}{
-		{"simple", "simple", []string{"library/alpine/manifests/3.18"}, false},
-		{"multistage", "multistage", []string{"library/golang/manifests/1.21", "library/alpine/manifests/3.18"}, false},
-		{"ghcr", "ghcr", []string{"actions/actions-runner/manifests/latest"}, false},
-		{"scratch", "scratch", []string{"library/golang/manifests/1.21"}, false},
-		{"copy-from", "copy-from", []string{"library/alpine/manifests/3.18", "library/busybox/manifests/1.36"}, false},
+		// Tests with default behavior (--prefer-dhi=false)
+		{"simple", "simple", nil, []string{"library/alpine/manifests/3.18"}, false},
+		{
+			"multistage",
+			"multistage",
+			nil,
+			[]string{"library/golang/manifests/1.21", "library/alpine/manifests/3.18"},
+			false,
+		},
+		{"ghcr", "ghcr", nil, []string{"actions/actions-runner/manifests/latest"}, false},
+		{"scratch", "scratch", nil, []string{"library/golang/manifests/1.21"}, false},
+		{
+			"copy-from",
+			"copy-from",
+			nil,
+			[]string{"library/alpine/manifests/3.18", "library/busybox/manifests/1.36"},
+			false,
+		},
 		{
 			"onbuild",
 			"onbuild",
+			nil,
 			[]string{"library/alpine/manifests/3.18", "library/nginx/manifests/1.25"},
 			true,
 		}, // hits real GitHub URL via ONBUILD ADD
 		{
 			"http-add",
 			"http-add",
+			nil,
 			[]string{"library/alpine/manifests/3.18"},
 			true,
 		}, // hits real GitHub URL
 		{
 			"git-add",
 			"git-add",
+			nil,
 			[]string{"library/alpine/manifests/3.18"},
 			true,
 		}, // hits real GitHub git repo
+		// Tests with DHI preference explicitly enabled
+		// Note: auth check uses auth-check:test which returns 404 (that's OK - means auth passed)
+		{
+			"prefer-dhi-simple",
+			"simple",
+			[]string{"--prefer-dhi"},
+			[]string{"auth-check/manifests/test", "alpine/manifests/3.18"},
+			false,
+		},
+		{
+			"prefer-dhi-multistage",
+			"multistage",
+			[]string{"--prefer-dhi"},
+			[]string{"auth-check/manifests/test", "golang/manifests/1.21", "alpine/manifests/3.18"},
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -155,7 +195,9 @@ func TestPin(t *testing.T) {
 
 			dockerfilePath := filepath.Join("testdata", tc.dir, "Dockerfile")
 
-			cmd := exec.Command(binaryPath, "pin", "--stdout", dockerfilePath)
+			args := append([]string{"pin", "--stdout"}, tc.args...)
+			args = append(args, dockerfilePath)
+			cmd := exec.Command(binaryPath, args...)
 			// Set CONTAINERS_REGISTRIES_CONF to use our mock registry
 			// and GOCOVERDIR to collect coverage data
 			cmd.Env = append(os.Environ(),

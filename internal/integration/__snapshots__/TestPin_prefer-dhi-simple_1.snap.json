@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "action": "CONVERT",
+      "selector": {
+        "identifier": "docker-image://alpine:3.18",
+        "match_type": "EXACT"
+      },
+      "updates": {
+        "identifier": "docker-image://dhi.io/alpine:3.18@sha256:30b5ad7be5360af70bb9fbc40027a6bc85fa8c20e5e0775b939ffa0b00b66f40"
+      }
+    }
+  ]
+}
