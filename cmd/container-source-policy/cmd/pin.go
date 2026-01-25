@@ -25,6 +25,13 @@ Example:
   container-source-policy pin --output policy.json Dockerfile
   container-source-policy pin --stdout Dockerfile.* > policy.json
   cat Dockerfile | container-source-policy pin --stdout -`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "prefer-dhi",
+				Value: false,
+				Usage: "prefer Docker Hardened Images (dhi.io) when available (requires: docker login dhi.io)",
+			},
+		},
 		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{{
 			Flags: [][]cli.Flag{
 				{&cli.StringFlag{
@@ -45,6 +52,7 @@ Example:
 
 			opts := pin.Options{
 				Dockerfiles: cmd.Args().Slice(),
+				PreferDHI:   cmd.Bool("prefer-dhi"),
 			}
 
 			policy, err := pin.GeneratePolicy(ctx, opts)

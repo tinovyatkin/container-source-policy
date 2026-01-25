@@ -2,9 +2,11 @@
 
 [![codecov](https://codecov.io/gh/tinovyatkin/container-source-policy/graph/badge.svg?token=tSSxWyOmP2)](https://codecov.io/gh/tinovyatkin/container-source-policy)
 
-Generate a Docker BuildKit **source policy** file by parsing Dockerfiles and pinning `FROM` images to immutable digests.
+Generate BuildKit **source policies** that make Docker builds reproducible and secure — without modifying your Dockerfiles.
 
-This helps make `docker buildx build` inputs reproducible without rewriting your Dockerfile.
+- 📌 **Pin** images and URLs to immutable checksums
+- 🛡️ **Harden** builds with [Docker Hardened Images](https://dhi.io) (fewer CVEs, smaller footprint)
+- ✅ **Validate** existing policies against Dockerfiles *(coming soon)*
 
 See the [BuildKit documentation on build reproducibility](https://github.com/moby/buildkit/blob/master/docs/build-repro.md) for more details on source policies.
 
@@ -67,6 +69,33 @@ Write directly to a file:
 
 ```bash
 container-source-policy pin --output source-policy.json Dockerfile
+```
+
+### Docker Hardened Images (DHI)
+
+Use `--prefer-dhi` to pin Docker Hub library images to their [Docker Hardened Images](https://www.docker.com/blog/docker-hardened-images-now-free/) equivalents when available:
+
+```bash
+# First, login to dhi.io with your Docker Hub credentials
+docker login dhi.io
+
+# Then use --prefer-dhi to prefer hardened images
+container-source-policy pin --prefer-dhi --stdout Dockerfile
+```
+
+This converts eligible images (e.g., `alpine:3.21`, `node:22`, `golang:1.23`) to their `dhi.io` equivalents, which are minimal, security-hardened versions with fewer vulnerabilities.
+
+- Only Docker Hub library images (`alpine`, `node`, `golang`, etc.) are eligible
+- Images not available on dhi.io silently fall back to docker.io
+- Non-library images (`ghcr.io/*`, `docker.io/myorg/*`) are unchanged
+- The policy selector still matches the original reference, so your Dockerfile works unchanged
+
+Example output with `--prefer-dhi`:
+```json
+{
+  "selector": { "identifier": "docker-image://golang:1.23" },
+  "updates": { "identifier": "docker-image://dhi.io/golang:1.23@sha256:..." }
+}
 ```
 
 Then pass the policy to BuildKit / Buildx via the environment variable:
@@ -147,6 +176,7 @@ UPDATE_SNAPS=true go test ./internal/integration/...
 - `cmd/container-source-policy/cmd/`: CLI commands (urfave/cli)
 - `internal/dockerfile`: Dockerfile parsing (`FROM` and `ADD` extraction)
 - `internal/registry`: registry client (image digest resolution)
+- `internal/dhi`: Docker Hardened Images reference mapping
 - `internal/http`: HTTP client (URL checksum fetching with optimizations)
 - `internal/git`: Git client (commit SHA resolution via git ls-remote)
 - `internal/policy`: BuildKit source policy types and JSON output
