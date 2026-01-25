@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -294,7 +295,12 @@ func processImage(
 		// Try DHI (Docker Hardened Images) first if enabled
 		if preferDHI && dhi.CanMapToDHI(task.ref) {
 			dhiRef, mapErr := dhi.MapToDHI(task.ref)
-			if mapErr == nil && dhiRef != nil {
+			if mapErr != nil {
+				if !errors.Is(mapErr, dhi.ErrNotEligible) {
+					bar.Abort(true)
+					return fmt.Errorf("failed to map DHI reference for %s: %w", task.original, mapErr)
+				}
+			} else if dhiRef != nil {
 				dhiDigest, dhiErr := client.GetDigest(ctx, dhiRef)
 				if dhiErr == nil {
 					// DHI image exists, use it
