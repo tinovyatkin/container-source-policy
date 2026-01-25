@@ -70,6 +70,25 @@ func (c *Client) GetDigest(ctx context.Context, ref reference.Named) (string, er
 	return digest.String(), nil
 }
 
+// isNotFoundError checks if the lowercase error string indicates a "not found" condition.
+func isNotFoundError(errStr string) bool {
+	return strings.Contains(errStr, "404") ||
+		strings.Contains(errStr, "not found") ||
+		strings.Contains(errStr, "manifest unknown") ||
+		strings.Contains(errStr, "name unknown") ||
+		strings.Contains(errStr, "unknown name") ||
+		strings.Contains(errStr, "does not exist")
+}
+
+// isAuthError checks if the lowercase error string indicates an authentication error.
+func isAuthError(errStr string) bool {
+	return strings.Contains(errStr, "401") ||
+		strings.Contains(errStr, "403") ||
+		strings.Contains(errStr, "unauthorized") ||
+		strings.Contains(errStr, "authentication required") ||
+		strings.Contains(errStr, "denied")
+}
+
 // CheckAuth verifies that the client can authenticate to a registry.
 // It does this by attempting to access an image reference, which triggers auth.
 // Returns nil if authentication succeeds (even if image doesn't exist),
@@ -94,20 +113,12 @@ func (c *Client) CheckAuth(ctx context.Context, registry string) error {
 		errStr := strings.ToLower(err.Error())
 
 		// 404/not found means auth succeeded but image doesn't exist - that's OK
-		if strings.Contains(errStr, "404") ||
-			strings.Contains(errStr, "not found") ||
-			strings.Contains(errStr, "manifest unknown") ||
-			strings.Contains(errStr, "name unknown") ||
-			strings.Contains(errStr, "unknown name") {
+		if isNotFoundError(errStr) {
 			return nil
 		}
 
 		// Check if it's an auth error
-		if strings.Contains(errStr, "unauthorized") ||
-			strings.Contains(errStr, "authentication required") ||
-			strings.Contains(errStr, "denied") ||
-			strings.Contains(errStr, "401") ||
-			strings.Contains(errStr, "403") {
+		if isAuthError(errStr) {
 			return fmt.Errorf("authentication failed for %s: run 'docker login %s' first", registry, registry)
 		}
 		return fmt.Errorf("failed to connect to %s: %w", registry, err)
@@ -132,24 +143,5 @@ func IsNotFoundOrAuthError(err error) bool {
 	}
 
 	errStr := strings.ToLower(err.Error())
-
-	// Check for HTTP status codes in error messages
-	// The containers/image library typically includes these in error text
-	if strings.Contains(errStr, "401") ||
-		strings.Contains(errStr, "403") ||
-		strings.Contains(errStr, "404") {
-		return true
-	}
-
-	// Check for common registry error messages (case-insensitive)
-	if strings.Contains(errStr, "manifest unknown") ||
-		strings.Contains(errStr, "not found") ||
-		strings.Contains(errStr, "unauthorized") ||
-		strings.Contains(errStr, "authentication required") ||
-		strings.Contains(errStr, "denied") ||
-		strings.Contains(errStr, "does not exist") {
-		return true
-	}
-
-	return false
+	return isNotFoundError(errStr) || isAuthError(errStr)
 }
