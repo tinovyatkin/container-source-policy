@@ -83,7 +83,8 @@ docker login dhi.io
 container-source-policy pin --prefer-dhi --stdout Dockerfile
 ```
 
-This converts eligible images (e.g., `alpine:3.21`, `node:22`, `golang:1.23`) to their `dhi.io` equivalents, which are minimal, security-hardened versions with fewer vulnerabilities.
+This converts eligible images (e.g., `alpine:3.21`, `node:22`, `golang:1.23`) to their `dhi.io` equivalents, which are minimal, security-hardened
+versions with fewer vulnerabilities.
 
 - Only Docker Hub library images (`alpine`, `node`, `golang`, etc.) are eligible
 - Images not available on dhi.io silently fall back to docker.io
@@ -91,6 +92,7 @@ This converts eligible images (e.g., `alpine:3.21`, `node:22`, `golang:1.23`) to
 - The policy selector still matches the original reference, so your Dockerfile works unchanged
 
 Example output with `--prefer-dhi`:
+
 ```json
 {
   "selector": { "identifier": "docker-image://golang:1.23" },

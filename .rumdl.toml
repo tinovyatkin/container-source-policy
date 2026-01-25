@@ -3,3 +3,5 @@ line_length = 150
 headings = false
 reflow = true
 code-blocks = false
+
+[MD031]
