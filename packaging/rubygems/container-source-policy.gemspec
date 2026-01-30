@@ -17,5 +17,5 @@ Gem::Specification.new do |spec|
     bin/container-source-policy
   ) + `find libexec/ -executable -type f -print0`.split("\x0")
 
-  spec.licenses = ['MIT']
+  spec.licenses = ['Apache-2.0']
 end

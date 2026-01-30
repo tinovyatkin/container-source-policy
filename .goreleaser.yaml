@@ -56,7 +56,7 @@ nfpms:
     homepage: https://github.com/tinovyatkin/container-source-policy
     maintainer: Konstantin Vyatkin <tino@vtkn.io>
     description: CLI tool for generating BuildKit source policy files
-    license: MIT
+    license: Apache-2.0
     formats:
       - deb
       - rpm
@@ -68,5 +68,5 @@ brews:
       name: homebrew-tap
     homepage: https://github.com/tinovyatkin/container-source-policy
     description: CLI tool for generating BuildKit source policy files
-    license: MIT
+    license: Apache-2.0
     skip_upload: auto

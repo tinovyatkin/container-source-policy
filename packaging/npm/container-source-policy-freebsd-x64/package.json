@@ -6,7 +6,7 @@
     "type": "git",
     "url": "git+https://github.com/tinovyatkin/container-source-policy.git"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/tinovyatkin/container-source-policy/issues"
   },
