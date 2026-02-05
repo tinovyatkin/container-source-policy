@@ -161,6 +161,73 @@ jobs:
           name: dist-signed
           path: dist-signed.tar
 
+  publish-homebrew:
+    needs: sign-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Generate Homebrew formula
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # Wait for release assets to be available (retry up to 10 times)
+          for i in {1..10}; do
+            if gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name' | grep -q "MacOS_arm64.tar.gz"; then
+              echo "Release assets are available"
+              break
+            fi
+            if [ "$i" -eq 10 ]; then
+              echo "Error: Release assets not available after 10 attempts"
+              exit 1
+            fi
+            echo "Waiting for release assets... (attempt $i)"
+            sleep 5
+          done
+
+          # Generate the formula (script will fetch checksums from release)
+          chmod +x packaging/homebrew/generate-formula.sh
+          packaging/homebrew/generate-formula.sh "$VERSION" container-source-policy.rb
+
+          # Show generated formula
+          cat container-source-policy.rb
+
+      - name: Setup SSH for tap repository
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}" > ~/.ssh/homebrew_tap_key
+          chmod 600 ~/.ssh/homebrew_tap_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config << EOF
+          Host github.com-tap
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/homebrew_tap_key
+            IdentitiesOnly yes
+          EOF
+
+      - name: Push to Homebrew tap
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # Configure git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clone the tap repository using SSH
+          git clone git@github.com-tap:wharflab/homebrew-tap.git tap
+
+          # Ensure Formula directory exists and copy formula
+          mkdir -p tap/Formula
+          cp container-source-policy.rb tap/Formula/container-source-policy.rb
+          cd tap
+          git add Formula/container-source-policy.rb
+          git commit -m "container-source-policy ${VERSION}" || echo "No changes to commit"
+          git push
+
   publish-npm:
     needs: sign-macos
     runs-on: ubuntu-latest

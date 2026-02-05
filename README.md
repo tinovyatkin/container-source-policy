@@ -38,6 +38,9 @@ gem exec container-source-policy --help
 Or install globally:
 
 ```bash
+# Homebrew (macOS / Linux)
+brew install wharflab/tap/container-source-policy
+
 # Go (build from source)
 go install github.com/wharflab/container-source-policy@latest
 

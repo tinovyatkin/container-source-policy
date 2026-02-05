@@ -1,0 +1,39 @@
+# typed: false
+# frozen_string_literal: true
+
+# Homebrew formula for container-source-policy - auto-generated, do not edit manually
+class ContainerSourcePolicy < Formula
+  desc "CLI tool for generating BuildKit source policy files"
+  homepage "https://github.com/wharflab/container-source-policy"
+  license "Apache-2.0"
+  version "{{VERSION}}"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/wharflab/container-source-policy/releases/download/v{{VERSION}}/container-source-policy_{{VERSION}}_MacOS_arm64.tar.gz"
+      sha256 "{{SHA256_DARWIN_ARM64}}"
+    else
+      url "https://github.com/wharflab/container-source-policy/releases/download/v{{VERSION}}/container-source-policy_{{VERSION}}_MacOS_x86_64.tar.gz"
+      sha256 "{{SHA256_DARWIN_AMD64}}"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/wharflab/container-source-policy/releases/download/v{{VERSION}}/container-source-policy_{{VERSION}}_Linux_arm64.tar.gz"
+      sha256 "{{SHA256_LINUX_ARM64}}"
+    else
+      url "https://github.com/wharflab/container-source-policy/releases/download/v{{VERSION}}/container-source-policy_{{VERSION}}_Linux_x86_64.tar.gz"
+      sha256 "{{SHA256_LINUX_AMD64}}"
+    end
+  end
+
+  def install
+    bin.install "container-source-policy"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/container-source-policy version")
+    assert_match "pin", shell_output("#{bin}/container-source-policy --help")
+  end
+end
