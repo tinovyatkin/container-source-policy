@@ -50,8 +50,122 @@ jobs:
           name: dist
           path: dist.tar
 
-  publish-npm:
+  sign-macos:
     needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: dist
+
+      - name: Extract artifacts
+        run: tar -xvf dist.tar
+
+      - name: Import Code Signing Certificate
+        uses: apple-actions/import-codesign-certs@v6
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Sign macOS Binaries
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Find and sign executable Mach-O binaries under darwin build dirs
+          find dist -type f -perm -111 -path '*_darwin_*/*' -print0 | while IFS= read -r -d '' binary; do
+            # Verify it's a Mach-O binary
+            if ! file "$binary" | grep -q 'Mach-O'; then
+              continue
+            fi
+
+            echo "Signing $binary"
+            codesign --force --options runtime --sign "$APPLE_TEAM_ID" "$binary"
+
+            # Verify signature
+            codesign --verify --verbose "$binary"
+
+            # Create zip for notarization (required)
+            zip "${binary}.zip" "$binary"
+
+            # Submit for notarization
+            xcrun notarytool submit "${binary}.zip" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+
+            # Note: stapling is not supported for standalone Mach-O binaries
+            # (only .app bundles, .dmg, and .pkg). The notarization ticket is
+            # stored on Apple's servers and Gatekeeper checks online.
+
+            # Clean up zip
+            rm "${binary}.zip"
+          done
+
+      - name: Re-create darwin archives with signed binaries
+        run: |
+          # Get version from tag
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # Dynamically find darwin build directories
+          ARM64_DIR=$(find dist -maxdepth 1 -type d -name 'container-source-policy_darwin_arm64*' | head -1)
+          AMD64_DIR=$(find dist -maxdepth 1 -type d -name 'container-source-policy_darwin_amd64*' | head -1)
+
+          # Copy LICENSE to build directories (GoReleaser only includes them in archives)
+          cp LICENSE "$ARM64_DIR/"
+          cp LICENSE "$AMD64_DIR/"
+
+          # Re-create Darwin arm64 archive
+          cd "$ARM64_DIR"
+          tar -czvf "../container-source-policy_${VERSION}_Darwin_arm64.tar.gz" container-source-policy LICENSE
+          cd ..
+
+          # Re-create Darwin x86_64 archive
+          cd "$(basename "$AMD64_DIR")"
+          tar -czvf "../container-source-policy_${VERSION}_Darwin_x86_64.tar.gz" container-source-policy LICENSE
+          cd ../..
+
+          # Generate new checksums for darwin archives
+          cd dist
+          shasum -a 256 "container-source-policy_${VERSION}_Darwin_arm64.tar.gz" "container-source-policy_${VERSION}_Darwin_x86_64.tar.gz" > darwin_checksums.txt
+          cat darwin_checksums.txt
+
+      - name: Upload signed archives to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # Replace unsigned darwin archives with signed ones
+          gh release upload "$GITHUB_REF_NAME" \
+            "dist/container-source-policy_${VERSION}_Darwin_arm64.tar.gz" \
+            "dist/container-source-policy_${VERSION}_Darwin_x86_64.tar.gz" \
+            --clobber
+
+          # Download current checksums, update darwin entries, re-upload
+          gh release download "$GITHUB_REF_NAME" -p "checksums.txt" -D /tmp
+          # Remove old darwin checksums and append new ones
+          grep -v "Darwin" /tmp/checksums.txt > /tmp/checksums_updated.txt || true
+          cat dist/darwin_checksums.txt >> /tmp/checksums_updated.txt
+          gh release upload "$GITHUB_REF_NAME" /tmp/checksums_updated.txt --clobber
+
+      - name: Re-package signed artifacts
+        run: tar -cvf dist-signed.tar dist/
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist-signed
+          path: dist-signed.tar
+
+  publish-npm:
+    needs: sign-macos
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ inputs.version || github.ref_name }}
@@ -63,8 +177,8 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: dist
-      - run: tar -xvf dist.tar
+          name: dist-signed
+      - run: tar -xvf dist-signed.tar
 
       - uses: actions/setup-node@v6
         with:
@@ -80,7 +194,7 @@ jobs:
           ruby pack.rb publish_npm
 
   publish-pypi:
-    needs: build
+    needs: sign-macos
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ inputs.version || github.ref_name }}
@@ -92,8 +206,8 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: dist
-      - run: tar -xvf dist.tar
+          name: dist-signed
+      - run: tar -xvf dist-signed.tar
 
       - name: Setup uv with python
         uses: astral-sh/setup-uv@v7
@@ -109,7 +223,7 @@ jobs:
           ruby pack.rb publish_pypi
 
   publish-gem:
-    needs: build
+    needs: sign-macos
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -124,8 +238,8 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: dist
-      - run: tar -xvf dist.tar
+          name: dist-signed
+      - run: tar -xvf dist-signed.tar
 
       - name: Configure RubyGems Trusted Publishing
         uses: rubygems/configure-rubygems-credentials@main
