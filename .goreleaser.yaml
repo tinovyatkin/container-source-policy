@@ -19,9 +19,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/tinovyatkin/container-source-policy/internal/version.Version={{.Version}}
-      - -X github.com/tinovyatkin/container-source-policy/internal/version.Commit={{.Commit}}
-      - -X github.com/tinovyatkin/container-source-policy/internal/version.Date={{.Date}}
+      - -X github.com/wharflab/container-source-policy/internal/version.Version={{.Version}}
+      - -X github.com/wharflab/container-source-policy/internal/version.Commit={{.Commit}}
+      - -X github.com/wharflab/container-source-policy/internal/version.Date={{.Date}}
 
 archives:
   - format: tar.gz
@@ -53,7 +53,7 @@ changelog:
 # Package managers (inspired by lefthook)
 nfpms:
   - package_name: container-source-policy
-    homepage: https://github.com/tinovyatkin/container-source-policy
+    homepage: https://github.com/wharflab/container-source-policy
     maintainer: Konstantin Vyatkin <tino@vtkn.io>
     description: CLI tool for generating BuildKit source policy files
     license: Apache-2.0
@@ -64,9 +64,9 @@ nfpms:
 
 brews:
   - repository:
-      owner: tinovyatkin
+      owner: wharflab
       name: homebrew-tap
-    homepage: https://github.com/tinovyatkin/container-source-policy
+    homepage: https://github.com/wharflab/container-source-policy
     description: CLI tool for generating BuildKit source policy files
     license: Apache-2.0
     skip_upload: auto

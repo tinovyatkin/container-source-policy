@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/tinovyatkin/container-source-policy/cmd/container-source-policy/cmd"
+	"github.com/wharflab/container-source-policy/cmd/container-source-policy/cmd"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/tinovyatkin/container-source-policy/internal/pin"
+	"github.com/wharflab/container-source-policy/internal/pin"
 )
 
 func pinCommand() *cli.Command {

@@ -22,12 +22,12 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/term"
 
-	httpclient "github.com/tinovyatkin/container-source-policy/httpchecksum"
-	"github.com/tinovyatkin/container-source-policy/internal/dhi"
-	"github.com/tinovyatkin/container-source-policy/internal/dockerfile"
-	"github.com/tinovyatkin/container-source-policy/internal/git"
-	"github.com/tinovyatkin/container-source-policy/internal/policy"
-	"github.com/tinovyatkin/container-source-policy/internal/registry"
+	httpclient "github.com/wharflab/container-source-policy/httpchecksum"
+	"github.com/wharflab/container-source-policy/internal/dhi"
+	"github.com/wharflab/container-source-policy/internal/dockerfile"
+	"github.com/wharflab/container-source-policy/internal/git"
+	"github.com/wharflab/container-source-policy/internal/policy"
+	"github.com/wharflab/container-source-policy/internal/registry"
 )
 
 // Options configures the pin operation

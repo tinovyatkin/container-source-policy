@@ -137,7 +137,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/tinovyatkin/container-source-policy
+        - github.com/wharflab/container-source-policy
     golines:
       max-len: 120
   exclusions:

@@ -4,7 +4,7 @@
   "description": "Generate Buildx container source policy file for a given Dockerfile",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tinovyatkin/container-source-policy.git"
+    "url": "git+https://github.com/wharflab/container-source-policy.git"
   },
   "main": "bin/index.js",
   "files": [
@@ -21,12 +21,12 @@
     "policy",
     "security"
   ],
-  "author": "tinovyatkin",
+  "author": "wharflab",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/tinovyatkin/container-source-policy/issues"
+    "url": "https://github.com/wharflab/container-source-policy/issues"
   },
-  "homepage": "https://github.com/tinovyatkin/container-source-policy#readme",
+  "homepage": "https://github.com/wharflab/container-source-policy#readme",
   "optionalDependencies": {
     "container-source-policy-darwin-arm64": "0.5.0",
     "container-source-policy-darwin-x64": "0.5.0",

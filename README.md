@@ -1,6 +1,6 @@
 # container-source-policy
 
-[![codecov](https://codecov.io/gh/tinovyatkin/container-source-policy/graph/badge.svg?token=tSSxWyOmP2)](https://codecov.io/gh/tinovyatkin/container-source-policy)
+[![codecov](https://codecov.io/gh/wharflab/container-source-policy/graph/badge.svg?token=tSSxWyOmP2)](https://codecov.io/gh/wharflab/container-source-policy)
 
 Generate BuildKit **source policies** that make Docker builds reproducible and secure — without modifying your Dockerfiles.
 
@@ -39,7 +39,7 @@ Or install globally:
 
 ```bash
 # Go (build from source)
-go install github.com/tinovyatkin/container-source-policy@latest
+go install github.com/wharflab/container-source-policy@latest
 
 # npm
 npm i -g container-source-policy

@@ -29,4 +29,4 @@ EXPERIMENTAL_BUILDKIT_SOURCE_POLICY=source-policy.json docker buildx build -t my
 ## More info
 
 See the upstream repository for full documentation:
-<https://github.com/tinovyatkin/container-source-policy>
+<https://github.com/wharflab/container-source-policy>

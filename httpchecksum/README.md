@@ -21,7 +21,7 @@ Package `httpchecksum` provides an HTTP client for computing checksums of remote
 ## Installation
 
 ```bash
-go get github.com/tinovyatkin/container-source-policy/httpchecksum
+go get github.com/wharflab/container-source-policy/httpchecksum
 ```
 
 ## Usage
@@ -29,7 +29,7 @@ go get github.com/tinovyatkin/container-source-policy/httpchecksum
 ### Basic checksum computation
 
 ```go
-import "github.com/tinovyatkin/container-source-policy/httpchecksum"
+import "github.com/wharflab/container-source-policy/httpchecksum"
 
 client := httpchecksum.NewClient()
 checksum, err := client.GetChecksum(ctx, "https://example.com/file.tar.gz")

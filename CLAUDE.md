@@ -67,7 +67,7 @@ go tool covdata textfmt -i=coverage -o=coverage.txt
 go tool cover -html=coverage.txt -o=coverage.html
 
 # View coverage for specific packages
-go tool covdata percent -i=coverage -pkg=github.com/tinovyatkin/container-source-policy/internal/pin
+go tool covdata percent -i=coverage -pkg=github.com/wharflab/container-source-policy/internal/pin
 ```
 
 ## Test Results Reporting

@@ -38,7 +38,7 @@ import (
 
 	"github.com/pquerna/cachecontrol/cacheobject"
 
-	"github.com/tinovyatkin/container-source-policy/internal/version"
+	"github.com/wharflab/container-source-policy/internal/version"
 )
 
 // AuthError indicates an HTTP resource requires authentication

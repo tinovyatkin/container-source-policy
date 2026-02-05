@@ -5,7 +5,7 @@ Gem::Specification.new do |spec|
   spec.email         = ["tino@vtkn.io"]
 
   spec.summary       = "Generate Buildx container source policy file for a given Dockerfile"
-  spec.homepage      = "https://github.com/tinovyatkin/container-source-policy"
+  spec.homepage      = "https://github.com/wharflab/container-source-policy"
   spec.post_install_message = "container-source-policy installed! Run 'container-source-policy --help' to see usage."
 
   spec.bindir        = "bin"

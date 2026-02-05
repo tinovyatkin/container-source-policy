@@ -13,8 +13,8 @@ import (
 
 	"github.com/gkampitakis/go-snaps/snaps"
 
-	"github.com/tinovyatkin/container-source-policy/internal/policy"
-	"github.com/tinovyatkin/container-source-policy/internal/testutil"
+	"github.com/wharflab/container-source-policy/internal/policy"
+	"github.com/wharflab/container-source-policy/internal/testutil"
 )
 
 // localhostPortRegex matches localhost URLs with dynamic ports (e.g., http://127.0.0.1:49677)
@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Build the module's main package with coverage instrumentation
-	cmd := exec.Command("go", "build", "-cover", "-o", binaryPath, "github.com/tinovyatkin/container-source-policy")
+	cmd := exec.Command("go", "build", "-cover", "-o", binaryPath, "github.com/wharflab/container-source-policy")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		panic("failed to build binary: " + string(out))

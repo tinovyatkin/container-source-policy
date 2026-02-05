@@ -1,4 +1,4 @@
-module github.com/tinovyatkin/container-source-policy
+module github.com/wharflab/container-source-policy
 
 go 1.25.7
 

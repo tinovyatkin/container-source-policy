@@ -13,7 +13,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tinovyatkin/container-source-policy"
+Homepage = "https://github.com/wharflab/container-source-policy"
 
 [project.scripts]
 container-source-policy = "container_source_policy.main:main"

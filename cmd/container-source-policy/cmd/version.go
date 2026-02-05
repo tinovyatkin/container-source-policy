@@ -6,7 +6,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/tinovyatkin/container-source-policy/internal/version"
+	"github.com/wharflab/container-source-policy/internal/version"
 )
 
 func versionCommand() *cli.Command {

@@ -3,7 +3,7 @@ import sys
 import platform
 import subprocess
 
-ISSUE_URL = "https://github.com/tinovyatkin/container-source-policy/issues/new"
+ISSUE_URL = "https://github.com/wharflab/container-source-policy/issues/new"
 ARCH_MAPPING = {
     'amd64': 'x86_64',
     'aarch64': 'arm64',

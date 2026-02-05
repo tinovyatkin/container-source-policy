@@ -4,13 +4,13 @@
   "description": "The darwin arm64 binary for container-source-policy",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tinovyatkin/container-source-policy.git"
+    "url": "git+https://github.com/wharflab/container-source-policy.git"
   },
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/tinovyatkin/container-source-policy/issues"
+    "url": "https://github.com/wharflab/container-source-policy/issues"
   },
-  "homepage": "https://github.com/tinovyatkin/container-source-policy#readme",
+  "homepage": "https://github.com/wharflab/container-source-policy#readme",
   "os": [
     "darwin"
   ],

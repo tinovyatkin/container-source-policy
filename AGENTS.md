@@ -26,7 +26,7 @@ Local usage examples:
 
 ## Coding Style & Naming Conventions
 
-- Format: `gofmt` + `goimports` (configured via `.golangci.yaml`, with `github.com/tinovyatkin/container-source-policy` as the local import prefix).
+- Format: `gofmt` + `goimports` (configured via `.golangci.yaml`, with `github.com/wharflab/container-source-policy` as the local import prefix).
 - Prefer small, focused packages under `internal/`; keep CLI wiring in `cmd/`.
 - Tests use standard Go conventions: filenames end in `*_test.go`.
 
