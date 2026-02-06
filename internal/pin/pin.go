@@ -296,48 +296,34 @@ func processImage(
 		var err error
 
 		// Try DHI (Docker Hardened Images) first if enabled
-		if preferDHI && dhi.CanMapToDHI(task.ref) {
-			dhiRef, mapErr := dhi.MapToDHI(task.ref)
-			if mapErr != nil {
-				if !errors.Is(mapErr, dhi.ErrNotEligible) {
-					bar.Abort(true)
-					return fmt.Errorf("failed to map DHI reference for %s: %w", task.original, mapErr)
-				}
-			} else if dhiRef != nil {
-				dhiDigest, dhiErr := client.GetDigest(ctx, dhiRef)
-				if dhiErr == nil {
-					// DHI image exists, use it
-					digestStr = dhiDigest
-					pinnedRef = dhiRef
-				} else if !registry.IsNotFoundOrAuthError(dhiErr) {
-					// Unexpected error (network issue, etc.) - fail the operation
-					bar.Abort(true)
-					return fmt.Errorf("failed to check DHI image %s: %w", dhiRef.String(), dhiErr)
-				}
-				// else: DHI not found or auth error, fall back to original below
+		if preferDHI {
+			pinnedRef, digestStr, err = tryPreferredRegistry(
+				ctx,
+				task.ref,
+				dhi.CanMapToDHI,
+				dhi.MapToDHI,
+				dhi.ErrNotEligible,
+				client,
+			)
+			if err != nil {
+				bar.Abort(true)
+				return fmt.Errorf("failed to resolve DHI image for %s: %w", task.original, err)
 			}
 		}
 
 		// Try ECR Public Gallery if enabled (and DHI wasn't used/found)
-		if pinnedRef == nil && preferECRPublic && ecrpublic.CanMapToECRPublic(task.ref) {
-			ecrRef, mapErr := ecrpublic.MapToECRPublic(task.ref)
-			if mapErr != nil {
-				if !errors.Is(mapErr, ecrpublic.ErrNotEligible) {
-					bar.Abort(true)
-					return fmt.Errorf("failed to map ECR Public reference for %s: %w", task.original, mapErr)
-				}
-			} else if ecrRef != nil {
-				ecrDigest, ecrErr := client.GetDigest(ctx, ecrRef)
-				if ecrErr == nil {
-					// ECR Public image exists, use it
-					digestStr = ecrDigest
-					pinnedRef = ecrRef
-				} else if !registry.IsNotFoundOrAuthError(ecrErr) {
-					// Unexpected error (network issue, etc.) - fail the operation
-					bar.Abort(true)
-					return fmt.Errorf("failed to check ECR Public image %s: %w", ecrRef.String(), ecrErr)
-				}
-				// else: ECR Public not found or auth error, fall back to original below
+		if pinnedRef == nil && preferECRPublic {
+			pinnedRef, digestStr, err = tryPreferredRegistry(
+				ctx,
+				task.ref,
+				ecrpublic.CanMapToECRPublic,
+				ecrpublic.MapToECRPublic,
+				ecrpublic.ErrNotEligible,
+				client,
+			)
+			if err != nil {
+				bar.Abort(true)
+				return fmt.Errorf("failed to resolve ECR Public image for %s: %w", task.original, err)
 			}
 		}
 
@@ -371,6 +357,40 @@ func processImage(
 
 		return nil
 	}
+}
+
+// tryPreferredRegistry attempts to resolve an image via a preferred registry mapper.
+// Returns (mappedRef, digest, nil) on success, or (nil, "", nil) to signal fallback.
+// Only returns a non-nil error on unexpected failures.
+func tryPreferredRegistry(
+	ctx context.Context,
+	ref reference.Named,
+	canMap func(reference.Named) bool,
+	mapFn func(reference.Named) (reference.Named, error),
+	notEligibleErr error,
+	client *registry.Client,
+) (reference.Named, string, error) {
+	if !canMap(ref) {
+		return nil, "", nil
+	}
+	mapped, err := mapFn(ref)
+	if err != nil {
+		if errors.Is(err, notEligibleErr) {
+			return nil, "", nil
+		}
+		return nil, "", err
+	}
+	if mapped == nil {
+		return nil, "", nil
+	}
+	digestStr, err := client.GetDigest(ctx, mapped)
+	if err == nil {
+		return mapped, digestStr, nil
+	}
+	if registry.IsNotFoundOrAuthError(err) {
+		return nil, "", nil
+	}
+	return nil, "", fmt.Errorf("failed to check image %s: %w", mapped.String(), err)
 }
 
 func processHTTP(
